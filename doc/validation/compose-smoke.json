@@ -1,0 +1,15 @@
+{
+  "startedAt": "2026-10-02T11:19:31.050Z",
+  "checks": [
+    "production-session-bootstrap-password-change",
+    "mysql-project-change-persistence",
+    "gitea-api-pr-and-git-cli-diff",
+    "queued-task-survives-app-worker-restart",
+    "named-volume-file-survives-restart",
+    "app-worker-jsonl-query-after-restart"
+  ],
+  "projectId": "project_b916d4d6-604f-406b-bdc3-7ce0a005b7d1",
+  "changeId": "change_a95b9efb-6573-404e-a16e-2ee8f4710936",
+  "fileId": "file_1ade529c-cd15-4d08-8e41-5cfa87c79fde",
+  "finishedAt": "2026-10-02T11:19:37.070Z"
+}

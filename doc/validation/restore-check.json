@@ -1,0 +1,17 @@
+{
+  "verifiedAt": "2026-10-02T11:43:07.803Z",
+  "backupAt": "2026-10-02T11:20:47.996708+00:00",
+  "recoveryPrefix": "devops-restore-1790940266",
+  "fileCounts": {
+    "platform_files": 2,
+    "audit_logs": 2,
+    "git_data": 54,
+    "git_config": 1
+  },
+  "matches": [
+    "platform_files",
+    "audit_logs",
+    "git_data",
+    "git_config"
+  ]
+}

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ikkyu-phx 影响分析图板</title>
+  <style>
+    :root {
+      --ink: #17221f;
+      --muted: #68736f;
+      --paper: #f6f4ef;
+      --panel: #fffdf9;
+      --line: #dcded7;
+      --teal: #0d766e;
+      --teal-soft: #d9efeb;
+      --coral: #c65a45;
+      --coral-soft: #fae2da;
+      --gold: #a66a00;
+      --gold-soft: #fff0c9;
+      --slate: #47565a;
+      --slate-soft: #e7ecec;
+      --shadow: 0 8px 24px rgba(23, 34, 31, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+    .wrap { max-width: 1450px; margin: 0 auto; padding: 34px 42px 48px; }
+    .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+    .eyebrow { color: var(--teal); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 8px 0 10px; font-size: clamp(30px, 4vw, 54px); line-height: 1.04; letter-spacing: -.02em; }
+    .dek { max-width: 760px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.65; }
+    .stamp { min-width: 195px; padding: 14px 16px; border: 1px solid var(--line); background: var(--panel); }
+    .stamp strong { display: block; font-size: 14px; }
+    .stamp span { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 20px 0 24px; }
+    .toolbar button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 13px; border-radius: 5px; cursor: pointer; font: inherit; font-size: 13px; }
+    .toolbar button[aria-pressed="true"] { color: white; border-color: var(--teal); background: var(--teal); }
+    .toolbar .note { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .evidence { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+    .evidence-item { padding: 15px 16px; border-top: 3px solid var(--slate); background: var(--panel); box-shadow: var(--shadow); }
+    .evidence-item:nth-child(2) { border-color: var(--teal); }
+    .evidence-item:nth-child(3) { border-color: var(--gold); }
+    .evidence-item:nth-child(4) { border-color: var(--coral); }
+    .evidence-item b { display: block; font-size: 22px; line-height: 1.2; }
+    .evidence-item span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .section-title { display: flex; justify-content: space-between; align-items: baseline; margin: 26px 0 11px; }
+    .section-title h2 { margin: 0; font-size: 19px; }
+    .section-title p { margin: 0; color: var(--muted); font-size: 12px; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .dot.current { background: var(--slate); }
+    .dot.spec { background: var(--gold); }
+    .dot.proposed { background: var(--teal); }
+    .lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+    .lane { min-height: 440px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .lane-head { display: flex; justify-content: space-between; gap: 14px; padding: 17px 18px 14px; border-bottom: 1px solid var(--line); }
+    .lane-head h3 { margin: 0; font-size: 17px; }
+    .lane-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .lane-index { color: var(--teal); font-size: 12px; font-weight: 800; }
+    .lane-body { padding: 14px 16px 18px; }
+    .item { position: relative; padding: 13px 14px 13px 17px; border-left: 4px solid var(--slate); background: #fbfbf8; margin: 0 0 11px; }
+    .item.spec { border-color: var(--gold); background: #fffaf0; }
+    .item.proposed { border-color: var(--teal); background: #f1faf8; }
+    .item h4 { margin: 0 0 5px; font-size: 14px; }
+    .item p { margin: 0; color: #4b5753; font-size: 12px; line-height: 1.55; }
+    .tag { display: inline-block; margin-bottom: 7px; padding: 3px 6px; border-radius: 3px; background: var(--slate-soft); color: var(--slate); font-size: 10px; font-weight: 800; }
+    .item.spec .tag { color: var(--gold); background: var(--gold-soft); }
+    .item.proposed .tag { color: var(--teal); background: var(--teal-soft); }
+    .item .ref { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .flow-wrap { margin-top: 24px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); padding: 19px 20px 22px; }
+    .flow { display: grid; grid-template-columns: 1.05fr .22fr 1.22fr .22fr 1.25fr .22fr 1.1fr; align-items: center; gap: 10px; margin-top: 16px; }
+    .flow-step { min-height: 92px; display: flex; flex-direction: column; justify-content: center; padding: 13px 14px; border: 1px solid var(--line); background: #fbfbf8; }
+    .flow-step strong { font-size: 13px; }
+    .flow-step small { margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .flow-step.decision { border-color: var(--coral); background: var(--coral-soft); }
+    .flow-step.action { border-color: var(--teal); background: var(--teal-soft); }
+    .arrow { color: var(--muted); text-align: center; font-size: 21px; }
+    .branch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 11px 0 0 28.5%; }
+    .branch div { padding: 10px 12px; font-size: 12px; line-height: 1.5; border-top: 3px solid var(--coral); background: #fff8f5; }
+    .branch div:last-child { border-color: var(--teal); background: #f1faf8; }
+    .impact { display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px; margin-top: 24px; }
+    .panel { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); padding: 18px 20px; }
+    .panel h3 { margin: 0 0 12px; font-size: 16px; }
+    .panel ul { margin: 0; padding-left: 18px; }
+    .panel li { margin: 8px 0; color: #4b5753; font-size: 12px; line-height: 1.55; }
+    .panel li strong { color: var(--ink); }
+    .checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .check { padding: 11px 12px; border: 1px solid var(--line); background: #fbfbf8; font-size: 12px; line-height: 1.5; }
+    .check b { color: var(--teal); }
+    .footer { display: flex; justify-content: space-between; gap: 24px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .footer strong { color: var(--ink); }
+    [data-filtered="true"] { display: none !important; }
+    @media (max-width: 980px) {
+      .wrap { padding: 24px 20px 36px; }
+      .masthead { display: block; }
+      .stamp { margin-top: 18px; }
+      .evidence, .lanes, .impact { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+      .branch { margin: 4px 0 0; }
+      .toolbar .note { width: 100%; margin-left: 0; }
+    }
+    @media print {
+      body { background: white; }
+      .wrap { max-width: none; padding: 18px; }
+      .toolbar { display: none; }
+      .lane, .panel, .flow-wrap, .evidence-item { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="masthead">
+      <div>
+        <div class="eyebrow">Impact board / Phoenix resource project</div>
+        <h1>ikkyu-phx<br>影响分析</h1>
+        <p class="dek">针对“检索无命中时返回固定提示，并跳过大模型生成”的候选变更，梳理页面、服务端逻辑与数据边界。图板将仓库事实、规格状态和实施建议分层呈现。</p>
+      </div>
+      <div class="stamp"><strong>调研基线</strong><span>HEAD e98da81</span><span>只读分析 · 2026-10-02</span><span>建议先确认图板，再进入修改</span></div>
+    </header>
+
+    <nav class="toolbar" aria-label="筛选图板内容">
+      <button type="button" data-filter="all" aria-pressed="true">全部层级</button>
+      <button type="button" data-filter="current" aria-pressed="false">仓库当前</button>
+      <button type="button" data-filter="spec" aria-pressed="false">规格定义</button>
+      <button type="button" data-filter="proposed" aria-pressed="false">建议变化</button>
+      <span class="note">点击筛选可单独查看事实、待建能力或实施建议</span>
+    </nav>
+
+    <section class="evidence" aria-label="调研摘要">
+      <div class="evidence-item"><b>1</b><span>现有 PC 页面资源：页面1及系统页；业务管理页面尚未重建。</span></div>
+      <div class="evidence-item"><b>ask</b><span>必填 domain / query / history，返回 markdown；流程包含权限、检索、拼接、LLM。</span></div>
+      <div class="evidence-item"><b>25</b><span>测试文件中的 test(...) 定义数量；本次只做静态盘点，未执行真实环境测试。</span></div>
+      <div class="evidence-item"><b>0</b><span>当前 database/app.phxdb 可确认的知识库业务表；看到的是 ACT_* / FLW_* 流程引擎表。</span></div>
+    </section>
+
+    <div class="section-title">
+      <div><h2>三层影响面</h2><p>先看现状，再看规格，最后看建议</p></div>
+      <div class="legend"><span><i class="dot current"></i>仓库当前</span><span><i class="dot spec"></i>规格定义</span><span><i class="dot proposed"></i>建议变化</span></div>
+    </div>
+
+    <section class="lanes">
+      <article class="lane">
+        <div class="lane-head"><div><h3>页面 · Page</h3><p>影响是契约兼容与后续补建，不把规格页面当成已存在页面。</p></div><span class="lane-index">01</span></div>
+        <div class="lane-body">
+          <div class="item current" data-level="current"><span class="tag">仓库当前</span><h4>页面资源有限</h4><p>PC 资源可确认有“页面1”和系统页；前端设计文档标记本轮暂不涉及管理端页面。</p><span class="ref">证据：spec/01-前端设计.md · documents/page/PC</span></div>
+          <div class="item spec" data-level="spec"><span class="tag">规格定义</span><h4>问答与检索页契约</h4><p>kb-qa 调用 KB_GetAvailableDomains、ask；kb-search 调用领域列表与带权限检索，结果使用 markdown / results。</p><span class="ref">证据：前端设计规格 §2–3</span></div>
+          <div class="item proposed" data-level="proposed"><span class="tag">建议变化</span><h4>页面结构保持不变</h4><p>若后续补建问答页，只消费既有 markdown 返回值；无命中提示由服务端统一返回，页面只展示，不复制判断逻辑。</p><span class="ref">实施：先补入口验收，再决定页面重建范围</span></div>
+        </div>
+      </article>
+
+      <article class="lane">
+        <div class="lane-head"><div><h3>逻辑 · Logic</h3><p>主影响面在 ask 的检索成功分支与 LLM 调用之间。</p></div><span class="lane-index">02</span></div>
+        <div class="lane-body">
+          <div class="item current" data-level="current"><span class="tag">仓库当前</span><h4>已有权限与检索链路</h4><p>先取可用领域，再校验访问权限；通过后调用 KB-RetrieveKnowledgeWithPermission，拼接命中文本并调用“大模型对话”。</p><span class="ref">证据：documents/logic/.../ask.json diagram</span></div>
+          <div class="item current" data-level="current"><span class="tag">仓库当前</span><h4>现有异常语义</h4><p>无权限已有固定提示；大模型无候选回答也有后置处理。未看到“检索成功但 results 为空时短路”的已确认分支。</p><span class="ref">结论来自静态流程核对，未执行运行时验证</span></div>
+          <div class="item proposed" data-level="proposed"><span class="tag">建议变化</span><h4>增加空集合判断</h4><p>在检索成功后、拼接提示词前判断知识列表长度为 0：返回固定 Markdown，模型调用次数为 0；有命中继续原路径。</p><span class="ref">边界：不改权限、检索算法、输入输出契约</span></div>
+        </div>
+      </article>
+
+      <article class="lane">
+        <div class="lane-head"><div><h3>数据 · Data</h3><p>本次候选变更没有足够证据支持新增业务表。</p></div><span class="lane-index">03</span></div>
+        <div class="lane-body">
+          <div class="item current" data-level="current"><span class="tag">仓库当前</span><h4>本地数据库是流程引擎表</h4><p>app.phxdb 可见 ACT_*、FLW_* 等流程引擎表；知识内容与检索数据由外部 ikkyu API / 存储提供。</p><span class="ref">证据：database/app.phxdb · spec/README.md</span></div>
+          <div class="item spec" data-level="spec"><span class="tag">规格定义</span><h4>数据契约已有边界</h4><p>检索返回“检索命中”列表及耗时字段；问答只返回字符串 markdown，调用方不直连知识库服务。</p><span class="ref">证据：ask.json returnValues · 前端设计规格 §1</span></div>
+          <div class="item proposed" data-level="proposed"><span class="tag">建议变化</span><h4>不新增表结构</h4><p>只增加逻辑分支和测试证据。发布前记录变更影响分析，明确“无迁移、无数据覆盖”；若未来要存提示文案，再单独立项。</p><span class="ref">实施：数据库迁移检查项应为 N/A，并留证</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="flow-wrap">
+      <div class="section-title"><div><h2>建议逻辑变化</h2><p>把控制点放在检索成功之后、提示词组装之前</p></div><span class="tag" style="margin:0;color:var(--teal);background:var(--teal-soft)">候选变更 CHG-001</span></div>
+      <div class="flow" aria-label="ask 逻辑流程">
+        <div class="flow-step"><strong>domain / query / history</strong><small>保持必填入参与 markdown 出参</small></div><div class="arrow">→</div>
+        <div class="flow-step"><strong>取领域 + 权限校验</strong><small>无权限继续返回既有固定提示</small></div><div class="arrow">→</div>
+        <div class="flow-step decision"><strong>带权限检索知识</strong><small>读取 results 列表；区分成功空结果与上游故障</small></div><div class="arrow">→</div>
+        <div class="flow-step action"><strong>空集合短路</strong><small>返回“没有找到可用资料，请换个问题或联系管理员补充。”</small></div>
+      </div>
+      <div class="branch"><div><strong>results = []</strong><br>固定 Markdown；模型调用计数 = 0；不进入提示词组装。</div><div><strong>results 有命中</strong><br>沿用拼接知识、调用大模型、提取候选回答的现有路径。</div></div>
+    </section>
+
+    <section class="impact">
+      <div class="panel">
+        <h3>实施做法 · 轻量四步</h3>
+        <ul>
+          <li><strong>1 / 先锁基线：</strong>保存 ask.json、相关依赖和当前测试盘点；确认不是从规格推断运行事实。</li>
+          <li><strong>2 / 改一个分支：</strong>只在检索成功后增加空集合判断；固定提示放在服务端，避免多个页面产生不同文案。</li>
+          <li><strong>3 / 补四类证据：</strong>无命中且不调用模型、有命中保留回答、无权限不泄露、检索故障不伪装成无资料。</li>
+          <li><strong>4 / 发布留证：</strong>确认无数据库迁移；分别核验测试制品、环境配置与应用入口，再决定是否补建页面。</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>确认清单 · 进入修改前</h3>
+        <div class="checklist">
+          <div class="check"><b>□</b> 认可页面影响为“后续补建 / 契约兼容”</div>
+          <div class="check"><b>□</b> 认可只改 ask 的空结果分支</div>
+          <div class="check"><b>□</b> 认可本次不新增业务数据库表</div>
+          <div class="check"><b>□</b> 认可先补测试证据再进入发布</div>
+        </div>
+        <p style="margin:14px 0 0;color:var(--muted);font-size:11px;line-height:1.6">图板中的“建议变化”不是已提交代码，也不代表真实运行环境已经验证。确认后可继续做代码级影响定位与测试改造。</p>
+      </div>
+    </section>
+
+    <footer class="footer"><div><strong>引用边界：</strong>工程事实来自只读仓库 e98da81；页面、逻辑和数据层判断按调研记录标注。Gartner 材料只用于平台方法论背景，不替代工程证据。</div><div>输出：doc/示例工程影响分析图板.html</div></footer>
+  </main>
+  <script>
+    const buttons = document.querySelectorAll('[data-filter]');
+    const items = document.querySelectorAll('.item');
+    buttons.forEach(button => button.addEventListener('click', () => {
+      const filter = button.dataset.filter;
+      buttons.forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      items.forEach(item => item.dataset.filtered = filter !== 'all' && item.dataset.level !== filter ? 'true' : 'false');
+    }));
+  </script>
+</body>
+</html>
