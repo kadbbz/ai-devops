@@ -38,6 +38,7 @@ COPY --from=gitea /lib/libc.musl-*.so.1 /lib/
 WORKDIR /app
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=backend /app/dist ./dist
+COPY src/archive.py ./dist/archive.py
 COPY --from=frontend /app/web/dist ./web/dist
 COPY package.json ./
 COPY docker/root/ /

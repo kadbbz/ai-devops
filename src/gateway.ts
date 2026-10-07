@@ -2,11 +2,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { gunzipSync } from "node:zlib";
 import { spawn } from "node:child_process";
 import {
+  activeActor,
   type Actor,
   check,
   find,
   access,
-  invalidate,
   id,
   now,
 } from "./model.js";
@@ -42,7 +42,7 @@ export function parsePush(body: Buffer) {
   check(
     commands.length === 1,
     "GIT_MULTI_REF",
-    "每次仅允许推送一个已签发工作分支",
+    "每次仅允许推送一个已有工作分支",
     403,
   );
   return { command: commands[0], pack: body.subarray(offset) };
@@ -132,15 +132,23 @@ export function registerGateway(
       }
       return control.exclusive(async () => {
         const state = await control.read();
+        activeActor(state, a);
         const project = find(state.projects, p.id);
         access(a, project, true);
         check(
-          ["human", "ide_agent", "devops_agent"].includes(a.role),
+          ["human", "ide_agent"].includes(a.role),
           "GIT_ROLE",
           "该身份不能推送代码",
           403,
         );
-        check(project.control === "ACTIVE", "CONTROL_FROZEN", "项目已冻结");
+        check(
+          project.status === "ACTIVE" &&
+            !state.requests.some(
+              (r) => r.projectId === project.id && r.status === "UNKNOWN",
+            ),
+          "REPOSITORY_UNKNOWN",
+          "仓库有未决操作，请先核对仓库",
+        );
         check(body, "GIT_PROTOCOL", "缺少 Git 数据", 400);
         const { command, pack } = parsePush(body);
         check(
@@ -150,36 +158,18 @@ export function registerGateway(
           403,
         );
         const branch = command.ref.replace(/^refs\/heads\//, "");
-        const credential = state.credentials.find(
-          (c) => c.id === a.credentialId,
-        );
-        check(
-          !credential?.branch || credential.branch === branch,
-          "GIT_DELEGATION_BRANCH",
-          "凭证不允许推送该分支",
-          403,
-        );
-        const intent = state.intents.find(
-          (i) =>
-            i.projectId === p.id && i.branch === branch && i.stage !== "MERGED",
+        const registered = state.branches.find(
+          (b) =>
+            b.projectId === project.id &&
+            b.name === branch &&
+            b.status === "ACTIVE",
         );
         check(
           command.ref === "refs/heads/" + branch &&
-            intent &&
-            intent.control === "ACTIVE",
+            registered &&
+            !["main", "devops/control"].includes(branch),
           "GIT_BRANCH_DENIED",
-          "只能推送已确认工作分支",
-          403,
-        );
-        check(
-          state.approvals.some(
-            (ap) =>
-              ap.subjectId === intent.id &&
-              ap.gate === "A" &&
-              ap.status === "VALID",
-          ),
-          "GATE_A_REQUIRED",
-          "工作区尚未签发",
+          "只能推送 DevOps 创建的工作分支",
           403,
         );
         check(
@@ -233,33 +223,15 @@ export function registerGateway(
             .split("\0")
             .filter(Boolean);
           check(files.length > 0, "EMPTY_PUSH", "没有文件变化");
-          const docPaths = [
-            `tasks/${intent.id}/manual.md`,
-            `tasks/${intent.id}/changelog.md`,
-            `tasks/${intent.id}/api-contract.md`,
-            `tasks/${intent.id}/test-cases.json`,
-            `tasks/${intent.id}/tests/`,
-          ];
-          const allowed = (path: string, patterns: string[]) =>
-            patterns.some((p) =>
-              p.endsWith("/") ? path.startsWith(p) : path === p,
-            );
-          for (const file of files) {
-            const patterns =
-              a.role === "devops_agent"
-                ? docPaths
-                : a.role === "ide_agent"
-                  ? intent.plan.application.idePaths
-                  : [...docPaths, ...intent.plan.application.idePaths];
+          for (const file of files)
             check(
-              allowed(file, patterns) &&
-                !file.startsWith(".devops/") &&
-                file !== "agent.md",
+              !file
+                .split("/")
+                .some((p) => [".git", ".devops"].includes(p.toLowerCase())),
               "GIT_PATH_DENIED",
-              `该身份无权修改 ${file}`,
+              "通信目录不能提交到业务分支",
               403,
             );
-          }
           const tree = (
             await exec(
               "git",
@@ -277,14 +249,14 @@ export function registerGateway(
         const op = {
           id: id("git"),
           projectId: p.id,
-          subjectId: intent.id,
-          kind: "git.push",
+          action: "git.push",
+          recovery: { operation: "git.push", branch, ...command },
           status: "RUNNING",
           payload: command,
           actor: a.id,
           createdAt: now(),
         };
-        state.operations.push(op);
+        state.requests.push(op);
         await control.save(state, a, "git.push.started", {
           projectId: p.id,
           operationId: op.id,
@@ -298,10 +270,6 @@ export function registerGateway(
             "Git 推送结果待对账",
             503,
           );
-          intent.sourceSha = actual;
-          intent.lastPusher = a.userId;
-          intent.stage = "IMPLEMENTING";
-          invalidate(state, intent);
           op.status = "SUCCEEDED";
           await control.save(state, a, "git.push.completed", {
             projectId: p.id,
@@ -312,8 +280,6 @@ export function registerGateway(
           return response;
         } catch (e) {
           op.status = "UNKNOWN";
-          intent.control = "UNKNOWN";
-          intent.reason = "推送结果未知，请对账";
           await control.save(state, a, "git.push.unknown", {
             projectId: p.id,
             operationId: op.id,

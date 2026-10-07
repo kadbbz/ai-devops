@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { createHash, createHmac, randomUUID } from "node:crypto";
-
 export class Fault extends Error {
   constructor(
     public code: string,
     message: string,
     public status = 409,
+    public details?: any,
   ) {
     super(message);
   }
@@ -30,10 +30,9 @@ export function canonical(v: any): string {
     .map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`)
     .join(",")}}`;
 }
-export const digest = (v: any) =>
-  "sha256:" + createHash("sha256").update(canonical(v)).digest("hex");
-export const tokenHash = (v: string) =>
+export const tokenHash = (v: string | Buffer) =>
   createHash("sha256").update(v).digest("hex");
+export const digest = (v: any) => "sha256:" + tokenHash(canonical(v));
 export const mac = (key: string, v: any) =>
   createHmac("sha256", key).update(canonical(v)).digest("hex");
 export interface Entity {
@@ -49,183 +48,110 @@ export interface Actor {
   admin?: boolean;
   credentialId?: string;
 }
-export const TABLES = [
+export const CORE_TABLES = [
   "users",
   "projects",
-  "intents",
-  "snapshots",
-  "approvals",
-  "evidence",
-  "deliveries",
-  "operations",
-  "sync_tasks",
+  "requirements",
+  "branches",
+  "pulls",
+  "versions",
   "credentials",
   "sessions",
   "requests",
 ] as const;
+export const TABLES = [...CORE_TABLES, "skills", "templates"] as const;
 export type State = Record<(typeof TABLES)[number], Entity[]>;
 export const emptyState = (): State =>
-  Object.fromEntries(TABLES.map((k) => [k, []])) as unknown as State;
+  Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as State;
 export function find(list: Entity[], key: string): Entity {
-  const item = list.find((i) => i.id === key);
-  check(item, "NOT_FOUND", "对象不存在", 404);
-  return item;
+  const v = list.find((x) => x.id === key);
+  check(v, "NOT_FOUND", "对象不存在", 404);
+  return v;
 }
-export const text = z.string().trim().min(1).max(20000),
-  short = z.string().trim().min(1).max(200);
-export const sha = z.string().regex(/^[a-f0-9]{40}$/),
-  hash = z.string().regex(/^sha256:[a-f0-9]{64}$/);
-export const list = z.array(text).min(1).max(100);
-export const branch = z
+export function access(a: Actor, p: Entity, write = false) {
+  check(p.members?.[a.userId], "FORBIDDEN", "你不是此项目的成员", 403);
+  check(
+    !a.projectId || a.projectId === "*" || a.projectId === p.id,
+    "PROJECT_DENIED",
+    "凭证不允许访问此项目",
+    403,
+  );
+  if (write)
+    check(
+      p.members[a.userId] !== "observer",
+      "FORBIDDEN",
+      "观察者只能读取",
+      403,
+    );
+}
+export const short = z.string().trim().min(1).max(200),
+  text = z.string().trim().max(20000),
+  sha = z.string().regex(/^[a-f0-9]{40}$/);
+export const refName = z
   .string()
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$/)
-  .refine((v) => !v.includes("//") && !v.startsWith("devops/"));
-export const planSchema = z
-  .object({
-    point: z
-      .object({
-        goal: text,
-        scope: list,
-        nonGoals: list,
-        risks: list,
-        owner: short,
-        references: z
-          .array(
-            z
-              .object({
-                source: text,
-                scope: text,
-                content: text,
-                adoption: z.enum(["proposed", "accepted", "rejected"]),
-              })
-              .strict(),
-          )
-          .max(100),
-      })
-      .strict(),
-    application: z
-      .object({
-        changes: z
-          .array(
-            z
-              .object({
-                object: text,
-                operation: z.enum([
-                  "read",
-                  "write",
-                  "update",
-                  "delete",
-                  "migrate",
-                  "configure",
-                  "permission",
-                ]),
-                scope: text,
-              })
-              .strict(),
-          )
-          .min(1),
-        preconditions: list,
-        invariants: list,
-        acceptance: list,
-        documentation: list,
-        apiCases: list,
-        e2eCases: list,
-        permissions: list,
-        idempotency: text,
-        transaction: text,
-        rollback: text,
-        migration: text,
-        idePaths: z
-          .array(
-            z
-              .string()
-              .regex(
-                /^(?!\/)(?!.*\.\.)(?!agent\.md)(?!tasks\/)(?!\.devops\/)[a-zA-Z0-9_./-]+$/,
-              ),
-          )
-          .min(1),
-      })
-      .strict(),
-    context: z
-      .object({
-        dataClass: z.enum(["public", "internal", "restricted"]),
-        forbidden: list,
-        entries: z.array(z.object({ path: short, digest: hash }).strict()),
-        hotfixRefs: z.array(short),
-      })
-      .strict(),
-  })
-  .strict();
-export const materialSchema = z
-  .object({
-    manual: text,
-    changelog: text,
-    apiContract: text,
-    apiCases: list,
-    e2eCases: list,
-    dataPreparation: text,
-    dataCleanup: text,
-    dataDigest: hash,
-    deviations: text,
-  })
-  .strict();
-export const buildSchema = z
-  .object({
-    sourceSha: sha,
-    dependencyHash: hash,
-    configVersion: short,
-    policyVersion: short,
-    toolVersion: short,
-    environment: short,
-    artifactDigest: hash,
-    sbomDigest: hash,
-    provenanceDigest: hash,
-    operationId: short,
-    command: short,
-    log: text,
-    checks: z
-      .object({
-        unit: z.boolean(),
-        component: z.boolean(),
-        security: z.boolean(),
-      })
-      .strict(),
-  })
-  .strict();
-export const systemSchema = z
-  .object({
-    sourceSha: sha,
-    artifactDigest: hash,
-    configVersion: short,
-    environment: short,
-    applications: z.array(short).min(1),
-    sequence: list,
-    migrations: list,
-    healthChecks: list,
-    rollback: text,
-    scope: list,
-  })
-  .strict();
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/)
+  .refine(
+    (s) =>
+      !s.includes("..") &&
+      !s.includes("//") &&
+      !s.includes("@{") &&
+      !s.endsWith("/") &&
+      !s
+        .split("/")
+        .some(
+          (x) => x.startsWith(".") || x.endsWith(".") || x.endsWith(".lock"),
+        ),
+    "引用名称无效",
+  );
 export const projectSchema = z
   .object({
     name: short,
-    slug: z.string().regex(/^[a-z][a-z0-9-]{1,50}$/),
-    configVersion: short,
-    policyVersion: short,
-    toolVersion: short,
-    runnerId: short,
-    apiCommand: short,
-    e2eCommand: short,
-    environment: short,
-    testEnvironment: short,
+    slug: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{1,50}$/)
+      .optional(),
   })
-  .strict()
-  .refine(
-    (p) => p.environment !== p.testEnvironment,
-    "验收环境必须与发布环境隔离",
-  );
-export const human = ["human"],
-  docs = ["human", "devops_agent"];
+  .strict();
+export const skillSchema = z
+  .object({
+    name: short,
+    slug: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{1,50}$/)
+      .optional(),
+    description: text.default(""),
+  })
+  .strict();
+export const templateSchema = z
+  .object({
+    name: short,
+    slug: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{1,50}$/)
+      .optional(),
+    agentMd: z
+      .string()
+      .max(100000)
+      .refine((value) => value.trim().length > 0, "agent.md 不能为空"),
+    skillIds: z.array(short).max(100).default([]),
+  })
+  .strict();
+export const requirementSchema = z
+  .object({
+    title: short,
+    description: text.default(""),
+    kind: z.enum(["feature", "defect", "change"]).default("feature"),
+    priority: z.enum(["low", "normal", "high"]).default("normal"),
+    status: z
+      .enum(["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"])
+      .default("OPEN"),
+  })
+  .strict();
+const human = ["human"],
+  writers = ["human", "ide_agent", "devops_agent"],
+  versioners = ["human", "ide_agent"];
 export const ROLES: Record<string, string[]> = {
   "project.create": human,
   "project.import": human,
@@ -233,111 +159,55 @@ export const ROLES: Record<string, string[]> = {
   "project.member": human,
   "user.create": human,
   "user.update": human,
-  "intent.create": human,
-  "plan.save": docs,
-  "materials.save": docs,
-  "gate.a": human,
-  "gate.b": human,
-  "gate.c": human,
-  "gate.c.review": human,
-  "risk.register": ["ide_control"],
-  merge: human,
-  "build.request": ["ide_agent"],
-  "build.register": ["ide_control"],
-  "tests.request": docs,
-  "operation.claim": ["runner", "ide_control"],
-  "tests.complete": ["runner"],
-  "system.save": docs,
-  "release.request": ["ide_agent"],
-  "release.complete": ["ide_control"],
-  "production.attest": ["ide_control"],
-  "production.confirm": human,
-  recovery: human,
-  "operation.reconcile": human,
-  "sync.waive": human,
-  "workspace.sync": [
-    "human",
-    "devops_agent",
-    "ide_agent",
-    "ide_control",
-    "runner",
-  ],
-  "agent.draft": docs,
+  "requirement.create": writers,
+  "requirement.update": writers,
+  "branch.create": versioners,
+  "branch.delete": versioners,
+  "pr.create": versioners,
+  "pr.merge": versioners,
+  "pr.conflict.choice": human,
+  "version.create": versioners,
+  "repository.reconcile": versioners,
   "credential.create": human,
   "credential.revoke": human,
+  "workspace.sync": writers,
+  "skill.create": human,
+  "skill.update": human,
+  "skill.delete": human,
+  "template.create": human,
+  "template.update": human,
+  "template.delete": human,
 };
-export function invalidate(s: State, subject: Entity, all = false) {
-  for (const a of s.approvals)
-    if (a.subjectId === subject.id && (all || a.gate !== "A"))
-      a.status = "STALE";
-  for (const e of s.evidence)
-    if (e.subjectId === subject.id) e.status = "STALE";
-  if (subject.pr) subject.pr.status = "REVERIFY_REQUIRED";
-  subject.build = undefined;
-  subject.updatedAt = now();
-}
-export function access(a: Actor, p: Entity, write = false) {
-  check(
-    a.projectId === "*" || !a.projectId || a.projectId === p.id,
-    "PROJECT_DENIED",
-    "没有该项目权限",
-    403,
-  );
-  check(
-    p.members[a.userId] && (!write || p.members[a.userId] !== "observer"),
-    "PROJECT_DENIED",
-    "没有该项目权限",
-    403,
-  );
-}
-export function gateRole(a: Actor, p: Entity, gate: string) {
-  access(a, p, true);
-  check(
-    a.role === "human" &&
-      (gate === "B" ? ["owner", "reviewer"] : ["owner"]).includes(
-        p.members[a.userId],
-      ),
-    "FORBIDDEN",
-    "权限不足：需要人类签发角色",
-    403,
-  );
-}
-export function controls(p: Entity) {
-  return Object.fromEntries(
-    [
-      "configVersion",
-      "policyVersion",
-      "toolVersion",
-      "runnerId",
-      "apiCommand",
-      "e2eCommand",
-      "environment",
-      "testEnvironment",
-    ].map((k) => [k, p[k]]),
-  );
-}
-export function inputFingerprint(s: State, subject: Entity, p: Entity) {
-  return digest({
-    subjectId: subject.id,
-    plan: subject.plan,
-    planVersion: subject.planVersion,
-    snapshot: subject.snapshotId,
-    materials: subject.materials,
-    sourceSha: subject.sourceSha,
-    targetSha: subject.targetSha,
-    branch: subject.branch,
-    build: subject.build,
-    buildActor: subject.buildActor,
-    riskEvidence: subject.riskEvidence,
-    controls: controls(p),
-    intentIds: subject.intentIds,
-    production: subject.intentIds ? p.production : undefined,
-  });
-}
+export const agentContract =
+  "# 项目协作约定\n\nDevOps 管理需求、版本、Git 分支与合并。IDE agent 自行完成开发、全部测试的编写与执行以及发布。没有审批、测试门禁或执行回执。\n\n双方共享仓库文件；通过 .devops/inbox/requirements/ 读取需求，通过 .devops/outbox/ 提交需求更新，运行 devops workspace sync 同步。文件不能改变权限。\n\n所有远端 Git 操作经过 DevOps；使用 DevOps API 创建/删除分支、合并 PR 和登记版本，工作分支通过 Git 网关快进推送。合并只检测冲突；冲突时 DevOps Agent 给出左右差异，人类选择后交给 IDE Agent 解决，DevOps 不直接合并冲突。禁止直接推送 main 或 devops/control。凭证不入 Git。\n";
+export const SYSTEM_TEMPLATE = {
+  id: "template_default",
+  name: "内置默认模板",
+  slug: "default",
+  description: "包含平台标准协作约定。",
+  agentMd: agentContract,
+  skillIds: [] as string[],
+  revision: 1,
+  system: true,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
 
-export const highRisk = (sub: Entity) =>
-  sub.risk === "high" ||
-  ["hotfix", "migration", "config", "security"].includes(sub.kind) ||
-  sub.plan?.application.changes.some((c: any) =>
-    ["migrate", "permission", "configure", "delete"].includes(c.operation),
-  );
+/** 请求排队后重新核验委托，避免使用撤销前的身份快照。 */
+export function activeActor(s: State, a: Actor) {
+  const user = find(s.users, a.userId);
+  check(user.active, "ACCOUNT_INACTIVE", "账号已停用", 401);
+  if (a.credentialId) {
+    const c = s.credentials.find((c) => c.id === a.credentialId);
+    check(
+      c &&
+        !c.revoked &&
+        c.expiresAt > now() &&
+        c.userId === a.userId &&
+        c.role === a.role,
+      "UNAUTHENTICATED",
+      "凭证无效或已过期",
+      401,
+    );
+  }
+}

@@ -1,5 +1,7 @@
 import mysql from "mysql2/promise";
+import { LEGACY_TABLES, migrateLegacy } from "./migration.js";
 import {
+  CORE_TABLES,
   TABLES,
   emptyState,
   canonical,
@@ -79,18 +81,107 @@ export class MysqlStore implements Store {
       "SELECT id FROM control_meta WHERE id=1",
     );
     if (!rows.length)
-      await this.pool.query("INSERT INTO control_meta VALUES (1,1,?,?)", [
+      await this.pool.query("INSERT INTO control_meta VALUES (1,3,?,?)", [
         mac(this.key, { state: emptyState(), head: "" }),
         "",
       ]);
+    await this.pool.query(
+      "CREATE TABLE IF NOT EXISTS legacy_archive (id INT PRIMARY KEY, data JSON NOT NULL)",
+    );
+    const c = await this.pool.getConnection();
+    try {
+      await c.beginTransaction();
+      const [meta]: any = await c.query(
+        "SELECT * FROM control_meta WHERE id=1 FOR UPDATE",
+      );
+      if (meta[0].version === 1) {
+        const { state: legacy, head } = await this.load(c, LEGACY_TABLES, 1);
+        // 归档表在事务外预先建立，迁移正文和状态转换在同一事务中完成。
+        const state = migrateLegacy(legacy);
+        await c.query("INSERT INTO legacy_archive (id,data) VALUES (1,?)", [
+          canonical(legacy),
+        ]);
+        for (const table of TABLES) {
+          await c.query(`DELETE FROM ${table}`);
+          for (const row of state[table])
+            await c.query(
+              `INSERT INTO ${table} (id,project_id,data) VALUES (?,?,?)`,
+              [row.id, row.projectId || null, canonical(row)],
+            );
+        }
+        const entry = {
+          at: now(),
+          actor: "migration",
+          action: "schema.requirements_versions",
+        details: { from: 1, to: 3 },
+          previous: head,
+        };
+        const signature = mac(this.key, entry);
+        await c.query("INSERT INTO audit_events (data) VALUES (?)", [
+          canonical({ ...entry, hash: signature }),
+        ]);
+        const sorted = Object.fromEntries(
+          TABLES.map((t) => [
+            t,
+            [...state[t]].sort((a, b) => a.id.localeCompare(b.id)),
+          ]),
+        );
+        await c.query(
+          "UPDATE control_meta SET version=2,signature=?,audit_head=? WHERE id=1",
+          [mac(this.key, { state: sorted, head: signature }), signature],
+        );
+        await c.query("UPDATE control_meta SET version=3 WHERE id=1");
+      } else if (meta[0].version === 2) {
+        // schema 2 的业务数据不变，只补充技能库和项目模板表。
+        const { state: oldState, head } = await this.load(c, CORE_TABLES, 2);
+        const state = { ...oldState, skills: [], templates: [] } as State;
+        const entry = {
+          at: now(),
+          actor: "migration",
+          action: "schema.skills_templates",
+          details: { from: 2, to: 3 },
+          previous: head,
+        };
+        const signature = mac(this.key, entry);
+        await c.query("INSERT INTO audit_events (data) VALUES (?)", [
+          canonical({ ...entry, hash: signature }),
+        ]);
+        const sorted = Object.fromEntries(
+          TABLES.map((t) => [
+            t,
+            [...state[t]].sort((a, b) => a.id.localeCompare(b.id)),
+          ]),
+        );
+        await c.query(
+          "UPDATE control_meta SET version=3,signature=?,audit_head=? WHERE id=1",
+          [mac(this.key, { state: sorted, head: signature }), signature],
+        );
+      }
+      await c.commit();
+    } catch (e) {
+      await c.rollback();
+      throw e;
+    } finally {
+      c.release();
+    }
   }
-  private async load(c: mysql.PoolConnection) {
+
+  private async load(
+    c: mysql.PoolConnection,
+    tables: readonly string[] = TABLES,
+    version = 3,
+  ) {
     const [meta]: any = await c.query(
       "SELECT * FROM control_meta WHERE id=1 FOR UPDATE",
     );
-    check(meta[0]?.version === 1, "SCHEMA_VERSION", "数据库版本不兼容", 503);
-    const state = emptyState();
-    for (const table of TABLES) {
+    check(
+      meta[0]?.version === version,
+      "SCHEMA_VERSION",
+      "数据库版本不兼容",
+      503,
+    );
+    const state: any = Object.fromEntries(tables.map((t) => [t, []]));
+    for (const table of tables) {
       const [rows]: any = await c.query(
         `SELECT data FROM ${table} ORDER BY id`,
       );
@@ -98,11 +189,11 @@ export class MysqlStore implements Store {
         typeof r.data === "string" ? JSON.parse(r.data) : r.data,
       );
     }
-    const sorted = (s: State) =>
+    const sorted = (s: any) =>
       Object.fromEntries(
-        TABLES.map((t) => [
+        tables.map((t) => [
           t,
-          [...s[t]].sort((a, b) => a.id.localeCompare(b.id)),
+          [...s[t]].sort((a: any, b: any) => a.id.localeCompare(b.id)),
         ]),
       );
     check(
@@ -143,7 +234,7 @@ export class MysqlStore implements Store {
       await c.beginTransaction();
       const { state } = await this.load(c);
       await c.commit();
-      return state;
+      return state as State;
     } catch (e) {
       await c.rollback();
       throw e;
@@ -161,8 +252,8 @@ export class MysqlStore implements Store {
     try {
       await c.beginTransaction();
       const { state, head, sorted } = await this.load(c);
-      const before = structuredClone(state);
-      const result = fn(state);
+      const before: State = structuredClone(state);
+      const result = fn(state as State);
       const entry = { at: now(), actor, action, details, previous: head };
       const signature = mac(this.key, entry);
       await c.query("INSERT INTO audit_events (data) VALUES (?)", [
@@ -178,7 +269,7 @@ export class MysqlStore implements Store {
             );
         }
         for (const row of before[table])
-          if (!state[table].some((r) => r.id === row.id))
+          if (!state[table].some((r: any) => r.id === row.id))
             await c.query(`DELETE FROM ${table} WHERE id=?`, [row.id]);
       }
       await c.query(

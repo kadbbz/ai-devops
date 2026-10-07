@@ -1,21 +1,18 @@
-# 测试与执行顺序
+# 验证需求与版本管理
 
-遵循根目录 agent.md：先写后端 API 用例再实现；前端实现后，依据 `doc/prd/prd.md` 写 Playwright；最后更新 HTML manual。测试适配器仅供 `NODE_ENV=test`，生产使用真实 MySQL/Gitea，没有免认证或模拟通过后门。
+依据 `agent.md`：先编写后端 API 测试并执行 RED，再实现并验证；前端实现后依据 PRD 编写浏览器脚本；更新 HTML 手册。测试针对本产品自身，DevOps 不负责运行用户项目测试。
+
+- `npm run typecheck`：后端与前端 TypeScript。
+- `npm run test:api`：无审批合并与版本、需求修订、项目权限、委托撤销、旧接口关闭、文件协议、未知 Git 结果对账、安全压缩包导入、默认密码、备份规则和迁移；冲突时验证左右差异报告、选择记录和不调用 Git merge。
+- `npm run test:e2e`：真实统一登录、名称建项目、需求直接改状态、关联分支、版本标签、委托、运维与窄屏。
+- `npm run test:integration`：真实 Gitea/MySQL、任意后缀压缩包、二进制和可执行位、Git HTTP clone/push、IDE 修改测试与 agent.md、拒绝绕过分支/主线/tag、无审批直接合并、不可变标签、CLI 同步和审计。
+- `npm run test:ops`：全新双卷一次启动、自动首备、手动冷备、全新空卷恢复、撤销会话和委托、需求/版本保留、隔离演练不启动 Web。
 
 ```sh
-npm ci
-npx playwright install chromium
-DEVOPS_PORT=18082 PUBLIC_ORIGIN=http://localhost:18082 docker compose -p ai-native-verify up -d --build --wait
-npm test
+DEVOPS_PORT=18083 PUBLIC_ORIGIN=http://localhost:18083 docker compose -p ai-native-default-verify up -d --build --wait
+DEVOPS_TEST_URL=http://localhost:18083 npm run test:e2e
+DEVOPS_TEST_URL=http://localhost:18083 npm run test:integration
+DEVOPS_TEST_CONTAINER=ai-native-default-verify-devops-1 npm run test:ops
 ```
 
-默认测试容器 `ai-native-verify-devops-1`，公开端口18082；环境变量 `DEVOPS_TEST_CONTAINER`/`DEVOPS_TEST_URL` 可更换测试入口，运维脚本的 backup volume 也需对应修改。不要对用户现有生产容器运行测试。旧 ai-devops-* 容器不参与测试。
-
-- `npm run test:api`：Fastify.inject API 与领域/备份/Git 协议门禁。MySQL/Gitea 适配器使用明确的测试替身，不把它们当真实集成证据。
-- `npm run test:e2e`：使用 `admin/admin` 统一登录、默认密码提示与本次忽略、创建项目/Intent、A、B 缺口阻断、审计/运维与390px窄屏。
-- `npm run test:integration`：真实 MySQL/Gitea；Ed25519 委托；受保护仓库；Git gateway 合法推送与非法创建分支/主线/协议修改阻断；共享文件同步；真实 PR/merge；最终提交重新执行近端测试；发布回执契约。外部 Runner/生产发布是隔离测试执行器，不能代表用户真实生产部署。
-- `npm run test:ops`：最终镜像全新空卷首次启动/首备；手动冷备；检查恰好两个 named volume 与唯一公开端口；新空卷恢复、Git fsck/refs、MySQL/HMAC 审计、旧会话/委托撤销、生产基线暂停。演练不启动 Web 或调度。临时首启卷清理；恢复卷保留供人工复核。
-
-脚本保存结果至忽略目录 `doc/test_case/results/`。Playwright 会话存在 `.data/test/`，均不得提交。测试使用隔离实例的 `admin/admin`；若删除测试卷重建，需要移走该实例对应的 `.data/test/session.json` 后重跑。
-
-`verification.md` 是可提交的执行摘要。升级、满盘/断电、所有热修复/未知路径等未覆盖项见 `doc/spec/implementation.md`；尚未测试不能标为通过。
+浏览器测试保存忽略目录 `.data/test/session.json`，集成测试复用同一登录。恢复测试从目标容器解析 backup 卷名，建立独立空 data 卷，不接触其他部署。结果存 `doc/test_case/results`，最终摘要见 `verification.md`。

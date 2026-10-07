@@ -1,6 +1,6 @@
 {
   "name": "ai-native-devops",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "tsc -p tsconfig.server.json && tsc --noEmit && vite build",
+    "build": "tsc -p tsconfig.server.json && cp src/archive.py dist/archive.py && tsc --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc --noEmit",
     "start": "node dist/server.js",
     "test:api": "NODE_ENV=test tsx --test doc/test_case/api/*.test.ts",

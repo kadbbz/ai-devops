@@ -1,62 +1,45 @@
-# 首版实现验证记录
+# 需求与版本管理验证记录
 
-验证日期：2026-10-06，Asia/Shanghai。结果对应本次工作区中的实现；没有创建提交或发布镜像。目标规格的全部验收尚未完成，范围以 [实现与验收范围](../spec/implementation.md) 为准。
+验证日期：2026-10-07，Asia/Shanghai。对应 schema 2、应用 2.0.0；以最新 [spec](../spec/spec.md) 为准。旧 Gate/Runner/执行控制不属于当前产品。
 
-## 环境与版本
+## 已完成
 
-- 隔离实例：`ai-native-default-verify-devops-1`，`http://localhost:18083`；旧 `ai-devops-*` 部署未参与测试。
-- Docker Engine 29.5.3，ARM64；宿主 Node 24.14.0。未验证 AMD64 镜像运行。
-- 最终镜像 `ai-native-devops:local`，已核对运行容器使用同一镜像；镜像摘要随每次构建变化，不作为功能验收依据。
-- 容器 Node 22.20.0、MySQL 8.4.6、Gitea 1.24.6、s6-overlay 3.2.0.2。Node/MySQL/Gitea 基础镜像固定 digest；s6 下载固定版本，尚未额外校验下载文件摘要。
-- 前端 React 19.1.1、Ant Design 5.27.4；浏览器测试 Playwright 1.58.2 / Chromium。
-
-## 已执行的验证
-
-| 检查 | 结果与证据范围 |
+| 检查 | 结果与范围 |
 | --- | --- |
-| `npm run typecheck` | 通过，后端和前端 TypeScript 检查 |
-| 镜像构建 | 通过，容器健康；内置真实 MySQL / Gitea / DevOps |
-| `npm run test:api` | 20/20 通过；认证、默认密码提示/忽略、CSRF、角色边界、A/B/C、批准失效、签名、恢复状态、跨项目拒绝、并发会话保存、备份与 Git 协议规则。使用测试数据库/Gitea 适配器，不能代替真实集成 |
-| `npm run test:e2e` | 3/3 通过；`admin/admin` 登录、默认密码提示、本次忽略、项目/Intent/A、B 证据缺口阻断、审计/运维、390px 窄屏 |
-| `npm run test:integration` | 通过；真实 MySQL/Gitea、Git 网关、分支权限、同仓文件归档、真实 PR/合并、最终 SHA 重验、签名回执与关闭。外部执行端为测试模拟器，详见下文 |
-| `npm run test:ops` | 通过；最终镜像全新空卷首启/首备、手动冷备、新空卷恢复、Git/MySQL 完整性、撤销旧凭证、隔离恢复不启动业务 API |
-| `npm audit --omit=dev` | 0 个已报告漏洞；这不是容器 OS/Gitea 镜像漏洞扫描结论 |
-| 人工视觉检查 | 桌面、390px 手机和 HTML manual 截图已检查；紫色卡片、独立页面，无横向溢出。未执行完整无障碍审计 |
-| `git diff --check` | 通过；临时凭证、会话、测试结果已由 `.gitignore` 排除 |
+| TypeScript 与构建 | `npm run typecheck`、宿主构建和最终 Docker 构建通过 |
+| API | 20/20；需求直接修改、修订冲突、无审批合并/标签、角色与项目边界、委托撤销、旧执行接口关闭、共享文件、未知 Git 结果对账、安全导入、默认密码、迁移与备份规则 |
+| 浏览器 | 3/3；真实 admin/admin 登录与默认密码提示、简化建项目、直接修改需求状态、关联分支、版本、委托、运维/审计、390px 窄屏 |
+| 真实集成 | Gitea/MySQL、无关后缀压缩包、二进制和执行位、Git 网关、IDE 修改 agent.md 与 API/E2E 文件、需求 CLI、无需审批或执行证明的 PR 合并、真实标签、凭证撤销及审计 |
+| 运维 | 最终镜像全新双卷一次启动、自动首备、手动冷备、新空卷恢复、Git/HMAC/数据库校验、需求/版本/标签保留、恢复演练不开放 Web |
+| 视觉与手册 | 已查看桌面、手机、HTML 手册截图；手机页面与手册均无横向溢出 |
+| 差异检查 | `git diff --check` 通过；源码无旧 Gate、Runner、执行动作实现；会话、凭证明文和测试产物均位于忽略目录 |
 
-执行顺序及重跑命令见 [测试说明](README.md)。未把设计文档中的路径模拟记为测试通过。
+测试先暴露旧接口与模型不匹配，再按 `agent.md` 实现后端；前端完成后按 PRD 编写浏览器脚本。真实测试还复现并修复 Gitea 首次推送后的异步索引时序，以及排队请求使用已撤销委托的问题。
 
-## 真实 Git 与共享工作区路径
+## 当前运行与迁移
 
-记录时间 `2026-10-06T03:34:31.136Z`，结果文件 [integration.json](results/integration.json)。该文件位于本地忽略目录，新的 checkout 需重跑才能生成。
+- 当前实例：`ai-native-default-verify-devops-1`，<http://localhost:18083>，健康状态正常。旧 18082 与其他 ai-devops 实例未参与升级。
+- 运行镜像与最终 `ai-native-devops:local` 相同：`sha256:0e3040d643b77e413ae28c6546df915c7ceab779cc21b73aad6a514af337a152`。
+- ARM64，容器 Node 22.20.0 / MySQL 8.4.6 / Gitea 1.24.6，Playwright Chromium。未验证 AMD64 运行。
+- 升级前在旧容器创建 v1 冷备 `bk_65ea4894fcf34d80a09b476b9894a33b`；旧源码快照存本地忽略目录 `.data/upgrade/source-before-v2.tar.gz`，可用于重建旧版本镜像。旧备份必须使用匹配的旧镜像恢复。
+- 原有 6 个项目、6 条需求文字完成迁移，保留业务 Git 历史；审计包含 `schema.requirements_versions`。旧状态完整归档到 legacy_archive，旧会话与委托清空。验收另行创建项目，最终数量包含这些测试数据。
 
-1. 同一人类身份创建项目和 Intent，提交方案，由人类签 Gate A；DevOps 创建工作分支与快照。
-2. 从 DevOps 网关 clone；在允许范围推送代码。直接创建远程分支、推送 main、改写锁定的 `agent.md` 均被拒绝。
-3. CLI 初始化 `.devops` 排除规则，上传 outbox；重复请求保持幂等。同仓 `devops/control` 中的归档回执与下载回执一致，业务源码 SHA 不被通信文件改变。
-4. `build.request` 创建固定操作，执行器领取后回传 Ed25519 签名构建证明；API/E2E 回执绑定原操作和输入指纹。缺少证据不能通过 B。
-5. B 创建真实 Gitea PR，人类在 DevOps 合并。重新 fetch 并 checkout 最终组合 SHA，重新执行测试及登记证据，准备系统方案后签 C。
-6. 测试中的外部发布执行器写入隔离版本文件，再登记精确 SHA/制品/环境/健康回执；平台核对后关闭交付。还验证了授权撤销、身份代理白名单和审计链。
+## 真实路径证据
 
-验收用用户项目最终 SHA：`cbe2aa869846f1fe20c1402237a4255e7820f516`。这是测试仓库的组合提交，**不是本平台源码提交号**。
+[integration.json](results/integration.json)，`2026-10-07T02:17:17.112Z`：
 
-执行器/Runner 的签名、操作领取和回执验证是真实执行的接口检查；其中构建、制品及生产发布由受控测试程序模拟，未部署任何用户生产服务。真实 IDE 控制面、制品库、隔离 Runner 和生产环境仍需按 [执行器接口](../spec/executors.md) 接入。
+1. 导入自定义后缀 ZIP，将原始 agent.md、二进制、隐藏文件、可执行脚本写入真实仓库。
+2. IDE 委托创建需求分支，clone 经 DevOps Git 网关；在本地编写并运行样例测试，推送 API/E2E 文件及 agent.md。
+3. DevOps Agent 可维护需求但不能推代码；直接创建远端分支、推 main 和推 tag 被拒绝。
+4. CLI outbox 更新需求，重复同步幂等；本地回执与同仓 devops/control 归档一致。
+5. 不上报测试证明，直接创建 PR、查看真实 diff、合并和创建不可变标签。错误 SHA 拒绝，合并不会自动完成需求。
+6. 旧测试/审批/发布接口返回 404，撤销委托立即失效，Gitea 原始写入口不公开。
 
-## 单容器、冷备与恢复
+## 冷备与恢复证据
 
-最新运维复跑于北京时间 11:41 完成：
+- [firstboot.json](results/firstboot.json)，`2026-10-07T02:17:34.673Z`：全新 data/backup 自动初始化全部服务、账号、OAuth 与首备，状态 READY。
+- [restore.json](results/restore.json)，`2026-10-07T02:17:53.861Z`：冷备 `bk_5dc13a39964a4862bcb2a5dbf25c56fb` 恢复到新空卷。保留 13 个项目、11 条需求、4 个版本；有效委托与会话均为 0。
+- 校验 Git fsck、分支与标签清单、数据库和 HMAC 审计链。仅两个 named volume，仅公开 DevOps 端口。
+- 隔离恢复演练没有 Web 服务，8081 未监听，维护入口返回 503。首次启动临时卷已清理，恢复演练数据卷保留供复核。
 
-- [firstboot.json](results/firstboot.json)：`2026-10-06T03:41:24.935Z`。最终镜像在两个全新空 named volume 上自动生成账号、数据库、OAuth 配置和首备，状态 `READY`，默认备份计划 `Asia/Shanghai 03:00`。
-- [restore.json](results/restore.json)：`2026-10-06T03:41:50.104Z`。手动冷备 ID `bk_8db2d3e6f2b24ff09dc225c4504707fa`，归档 SHA-256 `2a0c3d2893c1c0c37e9f09ecddd9f4f3e5a45e199ec5c3e2c82c3a3abba97e59`。
-- Docker inspect 确认仅 `/data`、`/backup` 两个挂载，运行实例仅发布 `8080/tcp`；没有 MySQL/Gitea 对外端口或额外匿名数据卷。
-- 使用同版本镜像将归档恢复到新空卷；归档摘要、安全路径、MySQL 数据和 HMAC 审计链、Git `fsck` / refs 校验通过。
-- 恢复后保留 7 个项目、6 个 Intent 和 2 个已关闭交付；旧会话 0、有效委托 0、已确认生产基线 0。外部状态需要重新对账，历史关闭记录未被改写。
-- 恢复演练实际检查：进程管理状态没有 Web 服务，连接 `127.0.0.1:8081` 被拒绝，维护入口访问 `/api/session` 返回 503。并非把测试报告中的布尔常量当作停用证明。演练容器未映射宿主端口，代码在演练模式下不启动调度器。
-- 首启临时卷已清理；恢复演练容器已移除，恢复数据卷保留以供人工复核。主验收容器保持健康运行。
-
-## 未完成项
-
-尚不能宣称完整 spec 或生产交付验收通过：跨版本升级/迁移、恢复报告导回主实例、生产热修复同步、高风险双人会签、多 PR 漂移和全部 UNKNOWN/满盘/中断/停机补跑路径仍需实现或扩大真实验证。每日调度规则已有测试，未等待真实时钟至凌晨做长时间运行验证。
-
-规范化数据库外键、独立 Git blob/修订索引、大日志存储、IDE 自动工作树/持续同步和真实生产执行端接入也未完成。更多实现边界见 [实现范围](../spec/implementation.md)。
-
-截图位于本地忽略目录：[桌面](results/desktop.png)、[手机](results/mobile.png)、[使用手册](results/manual.png)。可阅读的操作说明见 [HTML manual](../manual/index.html)。
+本地测试结果与截图均在忽略目录，新的 checkout 需按 [测试说明](README.md) 重跑。未执行长时间凌晨调度等待或完整容灾故障矩阵；定时计算有 API 测试，真实冷备与新卷恢复已验证。Vite 仍提示主包体积较大，不影响构建通过。IDE 的实际业务发布环境不属于 DevOps 的执行范围。

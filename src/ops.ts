@@ -34,7 +34,7 @@ const DATA = "/data",
   SECRET = "/data/secrets/devops.json",
   ROOT_SECRET = "/data/secrets/root.json";
 const VERSION = {
-  app: "1.0.0",
+  app: "2.0.0",
   mysql: "8.4.6",
   gitea: "1.24.6",
   node: "22.20.0",
@@ -242,9 +242,6 @@ export class Manager {
       {
         NODE_ENV: "production",
         DEVOPS_CONFIG: CONFIG,
-        AI_BASE_URL: this.config.model?.baseUrl,
-        AI_MODEL: this.config.model?.name,
-        AI_API_KEY: this.secrets.aiApiKey,
       },
     );
     await waitFor(async () => {
@@ -520,6 +517,22 @@ export class Manager {
             timeout: 60000,
           });
         });
+        const expectedTags = restoreMarker.tags?.[project.id];
+        if (expectedTags)
+          check(
+            JSON.stringify(
+              (await git.tags(project)).sort((a: any, b: any) =>
+                a.name.localeCompare(b.name),
+              ),
+            ) ===
+              JSON.stringify(
+                expectedTags.sort((a: any, b: any) =>
+                  a.name.localeCompare(b.name),
+                ),
+              ),
+            "RESTORE_TAGS",
+            "仓库标签与归档清单不一致",
+          );
         const expected = restoreMarker.refs?.[project.id];
         if (expected)
           check(
@@ -623,9 +636,12 @@ export class Manager {
       const state = await store.read(),
         git = new Gitea(this.config.giteaUrl, this.secrets.giteaToken);
       report.refs = {};
-      for (const project of state.projects)
+      report.tags = {};
+      for (const project of state.projects) {
         report.refs[project.id] = await git.branches(project);
-      report.schema = 1;
+        report.tags[project.id] = await git.tags(project);
+      }
+      report.schema = 2;
       report.installationId = this.root.installationId;
       report.cutoff = now();
       await store.close();
@@ -884,11 +900,12 @@ async function restore(backupId: string) {
     backupId,
     archiveSha256: manifest.sha256,
     refs: manifest.refs,
+    tags: manifest.tags,
     at: now(),
     requiresReconciliation: true,
   });
   await unlink("/data/.restore-incomplete");
-  console.log("归档已恢复；下一次启动将撤销短时凭证并暂停待执行操作。");
+  console.log("归档已恢复；下一次启动将撤销短时凭证并标记未决 Git 操作。");
 }
 async function cli() {
   const [command, ...args] = process.argv.slice(2);

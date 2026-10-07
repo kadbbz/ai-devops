@@ -656,3 +656,71 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+/* 需求与版本视图共用卡片布局，窄屏允许操作自然换行。 */
+.list-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+.card-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #756d86;
+  min-height: 48px;
+}
+.card-grid > a {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.card-grid .ant-typography {
+  overflow-wrap: anywhere;
+}
+.preserve-lines {
+  white-space: pre-wrap;
+}
+.credential-token {
+  overflow-wrap: anywhere;
+  margin-top: 24px;
+  font-family: monospace;
+}
+.card-grid > .ant-card {
+  min-width: 0;
+}
+.conflict-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+.conflict-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+.conflict-side-title {
+  font-weight: 600;
+  color: #6842b8;
+  margin-bottom: 6px;
+}
+.conflict-card .code {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.conflict-card .ant-radio-group {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .conflict-columns {
+    grid-template-columns: 1fr;
+  }
+}

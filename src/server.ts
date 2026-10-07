@@ -19,12 +19,12 @@ import {
   tokenHash,
   find,
   access,
-  inputFingerprint,
+  SYSTEM_TEMPLATE,
 } from "./model.js";
 import { registerGateway } from "./gateway.js";
 
 import { nextBackup } from "./backup.js";
-import { verifyReceipt, expireLeases } from "./safety.js";
+
 interface Options {
   store: Store;
   git: GitService;
@@ -87,15 +87,7 @@ export async function createApp(options: Options) {
       name = cred.name;
       projectId = cred.projectId;
       credentialId = cred.id;
-      actorId =
-        role === "human"
-          ? userId
-          : ["ide_control", "runner"].includes(role)
-            ? "executor_" +
-              tokenHash(
-                [cred.projectId, role, cred.name, cred.publicKey].join(":"),
-              )
-            : cred.id;
+      actorId = role === "human" ? userId : cred.id;
     } else {
       const session = s.sessions.find(
         (x) =>
@@ -123,7 +115,8 @@ export async function createApp(options: Options) {
       name: name || user.username,
       projectId,
       credentialId,
-      admin: role === "human" && user.admin,
+      admin:
+        role === "human" && user.admin && (!projectId || projectId === "*"),
     };
   };
   app.setErrorHandler(async (error: any, req, reply) => {
@@ -159,12 +152,15 @@ export async function createApp(options: Options) {
                 .map((i) => `${i.path.join(".")}: ${i.message}`)
                 .join("；")
             : "服务暂时不可用",
+      ...(error instanceof Fault && error.details !== undefined
+        ? { details: error.details }
+        : {}),
       requestId: req.id,
     });
   });
   app.get("/api/health", async () => {
     await store.read();
-    return { status: "ready", version: "1.0.0" };
+    return { status: "ready", version: "2.0.0" };
   });
   app.get("/api/session", async (req) => {
     const a = await actor(req);
@@ -470,104 +466,94 @@ export async function createApp(options: Options) {
   app.get("/api/workspace", async (req) => {
     const a = await actor(req),
       s = await store.read();
-    const projects = s.projects.filter((p) =>
-      a.role === "human"
-        ? p.members[a.userId]
-        : a.projectId === "*" || a.projectId === p.id,
+    const projects = s.projects.filter(
+      (p) =>
+        p.members[a.userId] &&
+        (!a.projectId || a.projectId === "*" || a.projectId === p.id),
     );
     const ids = new Set(projects.map((p) => p.id));
+    const templates = [
+      SYSTEM_TEMPLATE,
+      ...s.templates.filter((template) => template.id !== SYSTEM_TEMPLATE.id),
+    ].map((template) => {
+      const { files, ...metadata } = template as any;
+      return metadata;
+    });
     return {
       projects,
-      intents: s.intents.filter((i) => ids.has(i.projectId)),
-      deliveries: s.deliveries.filter((i) => ids.has(i.projectId)),
-      approvals: s.approvals.filter((i) => ids.has(i.projectId)),
-      evidence: s.evidence.filter((i) => ids.has(i.projectId)),
-      operations: s.operations.filter((i) => ids.has(i.projectId)),
-      syncTasks: s.sync_tasks.filter((i) => ids.has(i.projectId)),
-      credentials: s.credentials
-        .filter((i) => ids.has(i.projectId) && i.userId === a.userId)
-        .map(({ hash, ...c }) => c),
+      ...Object.fromEntries(
+        ["requirements", "branches", "pulls", "versions"].map((table) => [
+          table,
+          s[table as "requirements"].filter((r) => ids.has(r.projectId)),
+        ]),
+      ),
+      requests: s.requests
+        .filter((r) => ids.has(r.projectId) && r.status === "UNKNOWN")
+        .map((r) => ({
+          id: r.id,
+          projectId: r.projectId,
+          action: r.action,
+          status: r.status,
+          createdAt: r.createdAt,
+        })),
+      credentials:
+        a.role === "human"
+          ? s.credentials
+              .filter((c) => ids.has(c.projectId) && c.userId === a.userId)
+              .map(({ hash, ...c }) => c)
+          : [],
       users: a.admin
         ? s.users
         : s.users.filter((u) => projects.some((p) => p.members[u.id])),
+      skills: s.skills.map(({ files, ...skill }) => skill),
+      templates,
     };
   });
-  app.get("/api/intents/:id/workspace", async (req) => {
-    const a = await actor(req),
-      s = await store.read(),
-      i = find(s.intents, (req.params as any).id);
-    access(a, find(s.projects, i.projectId));
-    check(i.snapshotId, "WORKSPACE_REQUIRED", "尚未签发确认工作区");
-    return find(s.snapshots, i.snapshotId);
-  });
-  app.get("/api/preview/:kind/:id/:gate", async (req) => {
-    const a = await actor(req),
-      q = req.params as any;
-    return control.preview(a, q.kind, q.id, q.gate);
-  });
   app.post("/api/actions/:action", async (req) => {
-    const a = await actor(req),
-      action = (req.params as any).action,
-      key = req.headers["idempotency-key"] as string;
-    if (
-      [
-        "build.register",
-        "risk.register",
-        "tests.complete",
-        "release.complete",
-        "production.attest",
-        "workspace.sync",
-      ].includes(action) &&
-      ["ide_control", "runner"].includes(a.role)
-    ) {
-      const credential = find(
-        (await store.read()).credentials,
-        a.credentialId!,
-      );
-      verifyReceipt(
-        credential.publicKey,
-        String(req.headers["x-receipt-signature"] || ""),
-        { action, body: req.body, key },
-      );
-    }
-    return { result: await control.execute(a, action, req.body, key) };
+    const a = await actor(req);
+    return {
+      result: await control.run(
+        a,
+        (req.params as any).action,
+        req.body,
+        req.headers["idempotency-key"] as string,
+      ),
+    };
   });
   app.get("/api/projects/:id/workspace", async (req) => {
     const a = await actor(req),
       s = await store.read(),
       p = find(s.projects, (req.params as any).id);
     access(a, p);
-    const files: Record<string, any> = {};
-    for (const snapshot of s.snapshots.filter((x) => x.projectId === p.id))
-      files["inbox/ide/" + snapshot.id + ".json"] = snapshot;
-    for (const op of s.operations.filter(
-      (x) =>
-        x.projectId === p.id &&
-        ["build", "api", "e2e", "release"].includes(x.kind),
-    ))
-      files[
-        "inbox/" +
-          (["api", "e2e"].includes(op.kind) ? "runner" : "ide") +
-          "/" +
-          op.id +
-          ".json"
-      ] = op;
-    for (const receipt of s.requests.filter(
-      (x) => x.projectId === p.id && x.envelope,
-    ))
-      files["receipts/" + receipt.envelope.requestId + ".json"] =
-        receipt.result;
-    files["state.json"] = {
-      projectId: p.id,
-      intents: s.intents
-        .filter((x) => x.projectId === p.id)
-        .map((x) => ({ ...x, inputFingerprint: inputFingerprint(s, x, p) })),
-      deliveries: s.deliveries
-        .filter((x) => x.projectId === p.id)
-        .map((x) => ({ ...x, inputFingerprint: inputFingerprint(s, x, p) })),
-      syncedAt: now(),
+    return { files: control.files(s, p) };
+  });
+  app.get("/api/projects/:id/repository", async (req) => {
+    const a = await actor(req),
+      s = await store.read(),
+      p = find(s.projects, (req.params as any).id);
+    access(a, p);
+    const [branches, tags] = await Promise.all([git.branches(p), git.tags(p)]);
+    return { branches, tags };
+  });
+  app.get("/api/pulls/:id", async (req) => {
+    const a = await actor(req),
+      s = await store.read(),
+      row = find(s.pulls, (req.params as any).id),
+      p = find(s.projects, row.projectId);
+    access(a, p);
+    const pr = await git.pr(p, row.number),
+      targetSha = await git.head(p, "main"),
+      conflicts = await git.conflicts(p, targetSha, pr.head.sha);
+    return {
+      ...row,
+      headSha: pr.head.sha,
+      targetSha,
+      mergeable: !conflicts.hasConflicts,
+      conflictReport: conflicts,
+      conflicts: conflicts.conflicts,
+      merged: pr.merged,
+      diff: await git.diff(p, targetSha, pr.head.sha),
     };
-    return { files };
   });
   app.get("/api/audit", async (req) => {
     const a = await actor(req);
@@ -652,18 +638,7 @@ export async function createApp(options: Options) {
         : reply.sendFile("index.html"),
     );
   }
-  const leaseTimer = options.testing
-    ? undefined
-    : setInterval(() => {
-        void control
-          .exclusive(() =>
-            store.change("system", "operations.lease_check", expireLeases),
-          )
-          .catch(() => {});
-      }, 60000);
-  leaseTimer?.unref();
   app.addHook("onClose", async () => {
-    if (leaseTimer) clearInterval(leaseTimer);
     await store.close();
   });
   return app;

@@ -2,321 +2,528 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../../../src/server.js";
 import { MemoryStore } from "../../../src/store.js";
-import {
-  FakeGitea,
-  seed,
-  plan,
-  materials,
-  build,
-  receiptHeaders,
-} from "./fixtures.js";
-
-// 先验证权限与业务结果；测试适配器不进入生产启动路径。
+import { FakeGitea, seed } from "./fixtures.js";
 async function setup() {
-  const store = new MemoryStore(seed());
-  const git = new FakeGitea();
+  const store = new MemoryStore(seed()),
+    git = new FakeGitea();
   const app = await createApp({ store, git, testing: true });
   const call = async (
     action: string,
-    body: object = {},
+    body: any = {},
     who = "owner",
     key = crypto.randomUUID(),
   ) => {
     const r = await app.inject({
       method: "POST",
-      url: `/api/actions/${action}`,
-      headers: {
-        authorization: `Bearer ${who}`,
-        "idempotency-key": key,
-        ...receiptHeaders(action, body, key),
-      },
+      url: "/api/actions/" + action,
+      headers: { authorization: "Bearer " + who, "idempotency-key": key },
       payload: body,
     });
     return { status: r.statusCode, ...r.json() };
   };
-  const project = await call("project.create", {
-    name: "工单服务",
-    slug: "tickets",
-    configVersion: "1",
-    policyVersion: "1",
-    toolVersion: "node22",
-    runnerId: "acceptance",
-    apiCommand: "api",
-    e2eCommand: "e2e",
-    environment: "production",
-    testEnvironment: "acceptance",
-  });
-  assert.equal(project.status, 200);
-  const report = {
-    actualSha: await git.head(project.result, "production"),
-    artifactDigest: "sha256:" + "a".repeat(64),
-    environment: "production",
-    healthy: true,
-    operationId: crypto.randomUUID(),
-    log: "隔离测试执行器基线",
-  };
-  const attested = await call(
-    "production.attest",
-    { projectId: project.result.id, report },
-    "control",
-  );
-  assert.equal(
-    (
-      await call("production.confirm", {
-        projectId: project.result.id,
-        fingerprint: attested.result.fingerprint,
-      })
-    ).status,
-    200,
-  );
-
-  return { app, store, git, call, p: project.result };
+  return { store, git, app, call };
 }
-
-test("同账号会话、未登录、CSRF 与 agent 签发边界", async () => {
+test("仅名称建项目，无执行参数；需求可直接改状态且检查修订", async () => {
   const f = await setup();
-  assert.equal((await f.app.inject("/api/workspace")).statusCode, 401);
-  for (const action of ["gate.a", "gate.b", "gate.c", "merge", "recovery"])
-    assert.equal((await f.call(action, { id: "missing" }, "ide")).status, 403);
-  assert.equal(
-    (await f.call("project.create", { name: "越权" }, "devops")).status,
-    403,
-  );
-  assert.equal(
-    (await f.call("project.create", { name: "只读" }, "viewer")).status,
-    403,
-  );
-  await f.app.close();
-});
-
-test("A 快照同源、幂等、目标变化导致批准失效", async () => {
-  const f = await setup();
-  const i = (
-    await f.call("intent.create", {
-      projectId: f.p.id,
-      title: "防止重复工单",
-      description: "并发请求不能产生重复记录",
+  try {
+    const p = await f.call("project.create", { name: "客户管理" });
+    assert.equal(p.status, 200, JSON.stringify(p));
+    assert.ok(p.result.slug);
+    assert.equal(p.result.runnerId, undefined);
+    const r = await f.call("requirement.create", {
+      projectId: p.result.id,
+      title: "支持批量导入",
+      description: "上传客户文件",
       kind: "feature",
-      risk: "low",
-    })
-  ).result;
-  assert.equal(
-    (await f.call("gate.a", { id: i.id, fingerprint: "wrong", reason: "确认" }))
-      .status,
-    409,
-  );
-  assert.equal(
-    (await f.call("plan.save", { id: i.id, plan: plan() }, "devops")).status,
-    200,
-  );
-  const preview = await f.app.inject({
-    url: `/api/preview/intent/${i.id}/A`,
-    headers: { authorization: "Bearer owner" },
-  });
-  const input = {
-    id: i.id,
-    fingerprint: preview.json().fingerprint,
-    reason: "目标和恢复方式已确认",
-  };
-  const a = await f.call("gate.a", input, "owner", "gate-a-key");
-  assert.equal(a.status, 200);
-  assert.deepEqual(
-    (await f.call("gate.a", input, "owner", "gate-a-key")).result,
-    a.result,
-  );
-  assert.equal(
-    (
-      await f.call(
-        "gate.a",
-        { ...input, reason: "changed" },
-        "owner",
-        "gate-a-key",
-      )
-    ).status,
-    409,
-  );
-  const snapshot = await f.app.inject({
-    url: `/api/intents/${i.id}/workspace`,
-    headers: { authorization: "Bearer ide" },
-  });
-  assert.equal(snapshot.statusCode, 200);
-  assert.equal(snapshot.json().plan.point.goal, "避免重复工单");
-  assert.equal(f.git.branchesCreated, 1);
-  await f.call(
-    "plan.save",
-    {
-      id: i.id,
-      plan: { ...plan(), point: { ...plan().point, goal: "扩展需求" } },
-    },
-    "devops",
-  );
-  assert.equal(
-    (await f.store.read()).approvals.filter((a) => a.status === "VALID").length,
-    0,
-  );
-  assert.equal((await f.call("tests.request", { id: i.id })).status, 409);
-  await f.app.close();
-});
-
-test("真实执行证据才可 B；最终合并提交必须重验后 C；精确发布回执", async () => {
-  const f = await setup();
-  const i = (
-    await f.call("intent.create", {
-      projectId: f.p.id,
-      title: "幂等写入",
-      description: "避免重复记录",
+      priority: "normal",
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.result.revision, 1);
+    const update = {
+      id: r.result.id,
+      revision: 1,
+      title: "支持批量导入",
+      description: "上传客户文件",
       kind: "feature",
-      risk: "low",
-    })
-  ).result;
-  await f.call("plan.save", { id: i.id, plan: plan() }, "devops");
-  const sign = async (id: string, kind: string, gate: string) => {
-    const r = await f.app.inject({
-      url: `/api/preview/${kind}/${id}/${gate}`,
-      headers: { authorization: "Bearer owner" },
-    });
-    return f.call(`gate.${gate.toLowerCase()}`, {
-      id,
-      fingerprint: r.json().fingerprint,
-      reason: "已检查全部材料",
-    });
-  };
-  assert.equal((await sign(i.id, "intent", "A")).status, 200);
-  await f.call(
-    "materials.save",
-    { id: i.id, materials: materials() },
-    "devops",
-  );
-  assert.equal((await sign(i.id, "intent", "B")).status, 409);
-  const verify = async (id: string) => {
-    const state = await f.store.read();
-    const subject =
-      state.intents.find((x) => x.id === id) ||
-      state.deliveries.find((x) => x.id === id)!;
-    const sourceSha =
-      subject.sourceSha || (await f.git.head(f.p, subject.branch!));
-    const queued=(await f.call('build.request',{id},'ide')).result;
-    assert.equal((await f.call('operation.claim',{id:queued.id},'control')).status,200);
-    const receipt = {...build(sourceSha),operationId:queued.id};
+      priority: "normal",
+      status: "DONE",
+    };
+    const done = await f.call("requirement.update", update);
+    assert.equal(done.result.status, "DONE");
     assert.equal(
-      (await f.call("build.register", { id, build: receipt }, "ide")).status,
+      (await f.call("requirement.update", update)).code,
+      "REVISION_CONFLICT",
+    );
+    const w = (
+      await f.app.inject({
+        url: "/api/workspace",
+        headers: { authorization: "Bearer owner" },
+      })
+    ).json();
+    for (const key of [
+      "approvals",
+      "evidence",
+      "operations",
+      "deliveries",
+      "intents",
+    ])
+      assert.equal(w[key], undefined);
+  } finally {
+    await f.app.close();
+  }
+});
+test("旧审批与执行 API 全部关闭，不创建任务", async () => {
+  const f = await setup();
+  try {
+    for (const action of [
+      "gate.a",
+      "gate.b",
+      "gate.c",
+      "gate.c.review",
+      "tests.request",
+      "tests.complete",
+      "build.request",
+      "build.register",
+      "release.request",
+      "release.complete",
+      "operation.claim",
+      "production.confirm",
+      "production.attest",
+      "risk.register",
+    ])
+      assert.equal((await f.call(action)).status, 404, action);
+    assert.equal((await f.store.read()).requests.length, 0);
+  } finally {
+    await f.app.close();
+  }
+});
+test("需求分支、PR、版本不依赖审批和执行证明；幂等与漂移检查", async () => {
+  const f = await setup();
+  try {
+    const p = (
+      await f.call("project.create", {
+        name: "版本项目",
+        slug: "version-project",
+      })
+    ).result;
+    const baseSha = await f.git.head(p, "main");
+    const input = { projectId: p.id, name: "feature/import", baseSha };
+    const key = crypto.randomUUID();
+    const branch = await f.call("branch.create", input, "owner", key);
+    assert.equal(branch.status, 200, JSON.stringify(branch));
+    assert.deepEqual(
+      (await f.call("branch.create", input, "owner", key)).result,
+      branch.result,
+    );
+    assert.equal(
+      (
+        await f.call(
+          "branch.create",
+          { ...input, name: "different" },
+          "owner",
+          key,
+        )
+      ).status,
+      409,
+    );
+    const pr = await f.call("pr.create", {
+      projectId: p.id,
+      branchId: branch.result.id,
+      title: "支持导入",
+      description: "需求实现",
+    });
+    assert.equal(pr.status, 200, JSON.stringify(pr));
+    assert.equal(
+      (
+        await f.call("pr.merge", {
+          id: pr.result.id,
+          headSha: "0".repeat(40),
+          targetSha: baseSha,
+        })
+      ).code,
+      "HEAD_MOVED",
+    );
+    const merged = await f.call("pr.merge", {
+      id: pr.result.id,
+      headSha: await f.git.head(p, input.name),
+      targetSha: baseSha,
+    });
+    assert.equal(merged.status, 200, JSON.stringify(merged));
+    const ver = await f.call("version.create", {
+      projectId: p.id,
+      name: "v1.0.0",
+      sha: await f.git.head(p, "main"),
+      notes: "首个版本",
+      requirementIds: [],
+    });
+    assert.equal(ver.status, 200, JSON.stringify(ver));
+    assert.equal(ver.result.deploymentStatus, undefined);
+    assert.equal(
+      (
+        await f.call("branch.delete", {
+          id: branch.result.id,
+          headSha: await f.git.head(p, input.name),
+        })
+      ).status,
+      200,
+    );
+  } finally {
+    await f.app.close();
+  }
+});
+test("观察者、越权项目和 DevOps agent 不能操作版本；IDE agent 可按委托操作", async () => {
+  const f = await setup();
+  try {
+    const p = (await f.call("project.create", { name: "权限项目" })).result;
+    await f.call("project.member", {
+      projectId: p.id,
+      userId: "viewer",
+      role: "observer",
+    });
+    assert.equal(
+      (
+        await f.call(
+          "requirement.create",
+          { projectId: p.id, title: "越权" },
+          "viewer",
+        )
+      ).status,
       403,
     );
-    const registered = await f.call(
-      "build.register",
-      { id, build: receipt },
-      "control",
-    );
-    assert.equal(registered.status, 200, JSON.stringify(registered));
-    assert.equal((await f.store.read()).operations.find(o=>o.id===queued.id)!.status,"SUCCEEDED");
-    const requested = await f.call("tests.request", { id }, "devops");
-    assert.equal(requested.status, 200, JSON.stringify(requested));
-    for (const op of requested.result) {
-      assert.equal(
-        (await f.call("operation.claim", { id: op.id }, "runner")).status,
-        200,
-      );
-      const complete = await f.call(
-        "tests.complete",
-        {
-          id: op.id,
-          fingerprint: op.fingerprint,
-          outcome: "PASSED",
-          command: op.payload.command,
-          environment: "acceptance",
-          toolVersion: "node22",
-          dataDigest: op.payload.dataDigest,
-          prepared: true,
-          cleaned: true,
-          beforeDigest: "sha256:" + "b".repeat(64),
-          afterDigest: "sha256:" + "c".repeat(64),
-          log: "请求、响应与清理记录",
-        },
-        "runner",
-      );
-      assert.equal(complete.status, 200, JSON.stringify(complete));
-    }
-  };
-  await verify(i.id);
-  const b = await sign(i.id, "intent", "B");
-  assert.equal(b.status, 200, JSON.stringify(b));
-  const merged = await f.call("merge", {
-    ids: [i.id],
-    targetSha: await f.git.head(f.p, "main"),
-    reason: "同意合并",
-  });
-  assert.equal(merged.status, 200, JSON.stringify(merged));
-  const d = merged.result;
-  assert.equal((await sign(d.id, "delivery", "C")).status, 409);
-  await verify(d.id);
-  const current = (await f.store.read()).deliveries.find((x) => x.id === d.id)!;
-  await f.call(
-    "system.save",
-    {
-      id: d.id,
-      system: {
-        sourceSha: d.sourceSha,
-        artifactDigest: current.build!.artifactDigest,
-        environment: "production",
-        configVersion: "1",
-        applications: [i.id],
-        sequence: ["发布同一制品"],
-        migrations: ["无"],
-        healthChecks: ["健康接口"],
-        rollback: "恢复上一制品",
-        scope: ["工单服务"],
+    const cred = await f.call("credential.create", {
+      projectId: p.id,
+      name: "IDE",
+      role: "ide_agent",
+      hours: 1,
+    });
+    assert.equal(cred.status, 200);
+    const branch = await f.call(
+      "branch.create",
+      {
+        projectId: p.id,
+        name: "ide/work",
+        baseSha: await f.git.head(p, "main"),
       },
-    },
-    "devops",
-  );
-  assert.equal((await sign(d.id, "delivery", "C")).status, 200);
-  const op = (await f.call("release.request", { id: d.id }, "ide")).result;
-  assert.equal(
-    (await f.call("operation.claim", { id: op.id }, "control")).status,
-    200,
-  );
-  const result = await f.call(
-    "release.complete",
-    {
-      id: op.id,
-      fingerprint: op.fingerprint,
-      outcome: "SUCCEEDED",
-      actualSha: d.sourceSha,
-      artifactDigest: current.build!.artifactDigest,
-      environment: "production",
-      healthy: true,
-      log: "实际版本核验一致",
-    },
-    "control",
-  );
-  assert.equal(result.status, 200, JSON.stringify(result));
-  assert.equal(
-    (await f.store.read()).deliveries.find((x) => x.id === d.id)!.stage,
-    "CLOSED",
-  );
-  await f.app.close();
+      cred.result.token,
+    );
+    assert.equal(branch.status, 200, JSON.stringify(branch));
+    const docs = await f.call("credential.create", {
+      projectId: p.id,
+      name: "需求助手",
+      role: "devops_agent",
+      hours: 1,
+    });
+    assert.equal(
+      (
+        await f.call(
+          "branch.create",
+          {
+            projectId: p.id,
+            name: "docs/work",
+            baseSha: await f.git.head(p, "main"),
+          },
+          docs.result.token,
+        )
+      ).status,
+      403,
+    );
+    const other = (await f.call("project.create", { name: "另一项目" })).result;
+    assert.equal(
+      (
+        await f.call(
+          "requirement.create",
+          { projectId: other.id, title: "越界" },
+          cred.result.token,
+        )
+      ).status,
+      403,
+    );
+    await f.call("credential.revoke", { id: cred.result.id });
+    assert.equal(
+      (
+        await f.call(
+          "requirement.create",
+          { projectId: p.id, title: "已撤销" },
+          cred.result.token,
+        )
+      ).status,
+      401,
+    );
+  } finally {
+    await f.app.close();
+  }
+});
+test("文件同步只维护需求；拒绝执行动作和伪造角色", async () => {
+  const f = await setup();
+  try {
+    const p = (await f.call("project.create", { name: "共享项目" })).result;
+    const envelope = {
+      protocolVersion: 2,
+      projectId: p.id,
+      requestId: crypto.randomUUID(),
+      action: "requirement.create",
+      payload: {
+        title: "共享需求",
+        description: "IDE 自动测试",
+        kind: "feature",
+        priority: "normal",
+      },
+    };
+    const key = crypto.randomUUID(),
+      ok = await f.call("workspace.sync", envelope, "owner", key);
+    assert.equal(ok.status, 200, JSON.stringify(ok));
+    assert.deepEqual(
+      (await f.call("workspace.sync", envelope, "owner", key)).result,
+      ok.result,
+    );
+    assert.equal(
+      (
+        await f.call("workspace.sync", {
+          ...envelope,
+          requestId: crypto.randomUUID(),
+          action: "tests.complete",
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await f.call("workspace.sync", {
+          ...envelope,
+          requestId: crypto.randomUUID(),
+          actorId: "admin",
+        })
+      ).status,
+      400,
+    );
+    const files = (
+      await f.app.inject({
+        url: "/api/projects/" + p.id + "/workspace",
+        headers: { authorization: "Bearer owner" },
+      })
+    ).json().files;
+    assert.ok(
+      Object.keys(files).some((k) => k.startsWith("inbox/requirements/")),
+    );
+    assert.ok(!Object.keys(files).some((k) => k.includes("runner")));
+  } finally {
+    await f.app.close();
+  }
 });
 
-test("项目外委托、伪造文件签发和跨角色回执被阻断", async () => {
+test("Git 成功但响应丢失：不盲重试，按实际分支对账后恢复", async () => {
   const f = await setup();
-  assert.equal(
-    (
+  try {
+    const p = (await f.call("project.create", { name: "恢复项目" })).result,
+      baseSha = await f.git.head(p, "main"),
+      original = f.git.createBranch.bind(f.git);
+    f.git.createBranch = async (p, b, sha) => {
+      await original(p, b, sha);
+      throw Error("响应丢失");
+    };
+    const body = { projectId: p.id, name: "feature/recover", baseSha },
+      key = crypto.randomUUID();
+    assert.equal(
+      (await f.call("branch.create", body, "owner", key)).status,
+      500,
+    );
+    assert.equal(
+      (await f.call("branch.create", body, "owner", key)).code,
+      "REQUEST_UNRESOLVED",
+    );
+    assert.equal(f.git.branchesCreated, 1);
+    assert.equal(
+      (await f.call("repository.reconcile", { projectId: p.id })).status,
+      200,
+    );
+    assert.equal(
+      (await f.call("branch.create", body, "owner", key)).result.name,
+      body.name,
+    );
+    assert.equal(f.git.branchesCreated, 1);
+  } finally {
+    await f.app.close();
+  }
+});
+test("成员移除即时取消代理访问，项目管理员也不能跨项目读取正文", async () => {
+  const f = await setup();
+  try {
+    const p = (await f.call("project.create", { name: "可见性" })).result;
+    await f.call("project.member", {
+      projectId: p.id,
+      userId: "reviewer",
+      role: "member",
+    });
+    const c = (
       await f.call(
-        "workspace.sync",
-        { projectId: f.p.id, requestId: "fake", action: "gate.a", payload: {} },
-        "ide",
+        "credential.create",
+        { projectId: p.id, name: "共享 IDE", role: "ide_agent", hours: 1 },
+        "reviewer",
       )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (await f.call("build.register", { id: "missing", build: {} }, "devops"))
-      .status,
-    403,
-  );
-  assert.equal(
-    (await f.call("release.complete", { id: "missing" }, "ide")).status,
-    403,
-  );
-  await f.app.close();
+    ).result;
+    await f.call("project.member", {
+      projectId: p.id,
+      userId: "reviewer",
+      role: "remove",
+    });
+    assert.equal(
+      (
+        await f.call(
+          "requirement.create",
+          { projectId: p.id, title: "失去权限" },
+          c.token,
+        )
+      ).status,
+      403,
+    );
+    const w = await f.app.inject({
+      url: "/api/workspace",
+      headers: { authorization: "Bearer " + c.token },
+    });
+    assert.equal(w.json().projects.length, 0);
+    const other = (
+      await f.call("project.create", { name: "成员私有" }, "reviewer")
+    ).result;
+    const ownerView = (
+      await f.app.inject({
+        url: "/api/workspace",
+        headers: { authorization: "Bearer owner" },
+      })
+    ).json();
+    assert.ok(!ownerView.projects.some((p: any) => p.id === other.id));
+  } finally {
+    await f.app.close();
+  }
+});
+
+test("等待写锁期间撤销的凭证，不能使用旧身份继续写入", async () => {
+  const f = await setup();
+  try {
+    const p = (await f.call("project.create", { name: "排队权限" })).result;
+    const credential = (
+      await f.call("credential.create", {
+        projectId: p.id,
+        name: "IDE",
+        role: "ide_agent",
+        hours: 1,
+      })
+    ).result;
+    // Controller 的调用方可能已验证过令牌；执行时仍须检查最新委托。
+    const { Control } = await import("../../../src/control.js");
+    const c = new Control(f.store, f.git);
+    await f.call("credential.revoke", { id: credential.id });
+    await assert.rejects(
+      () =>
+        c.run(
+          {
+            id: credential.id,
+            userId: "owner",
+            role: "ide_agent",
+            name: "IDE",
+            projectId: p.id,
+            credentialId: credential.id,
+          },
+          "requirement.create",
+          { projectId: p.id, title: "撤销后的请求" },
+          crypto.randomUUID(),
+        ),
+      (e: any) => e.status === 401,
+    );
+  } finally {
+    await f.app.close();
+  }
+});
+
+test("有冲突时只返回 DevOps Agent 差异报告，记录左右选择但绝不合并", async () => {
+  const f = await setup();
+  try {
+    const p = (await f.call("project.create", { name: "冲突项目" })).result;
+    const baseSha = await f.git.head(p, "main");
+    const branch = (
+      await f.call("branch.create", {
+        projectId: p.id,
+        name: "feature/conflict",
+        baseSha,
+      })
+    ).result;
+    const pr = (
+      await f.call("pr.create", {
+        projectId: p.id,
+        branchId: branch.id,
+        title: "冲突变更",
+        description: "并行修改同一文件",
+      })
+    ).result;
+    f.git.conflictReport = {
+      hasConflicts: true,
+      targetSha: baseSha,
+      headSha: await f.git.head(p, branch.name),
+      conflicts: [
+        {
+          id: "conflict_1",
+          path: "src/config.ts",
+          kind: "content",
+          summary: "同一配置项在 main 与工作分支中都被修改",
+          base: "const mode = 'base';",
+          left: "const mode = 'main';",
+          right: "const mode = 'feature';",
+        },
+      ],
+    };
+    const view = await f.app.inject({
+      url: "/api/pulls/" + pr.id,
+      headers: { authorization: "Bearer owner" },
+    });
+    assert.equal(view.statusCode, 200);
+    assert.equal(view.json().conflicts[0].path, "src/config.ts");
+    assert.equal(view.json().conflicts[0].left, "const mode = 'main';");
+    assert.equal(view.json().conflicts[0].right, "const mode = 'feature';");
+    const blocked = await f.call("pr.merge", {
+      id: pr.id,
+      headSha: f.git.conflictReport.headSha,
+      targetSha: baseSha,
+    });
+    assert.equal(blocked.status, 409);
+    assert.equal(blocked.code, "MERGE_CONFLICT");
+    assert.equal(blocked.details.conflicts[0].id, "conflict_1");
+    assert.equal(f.git.mergeCalls, 0);
+    const choice = await f.call("pr.conflict.choice", {
+      id: pr.id,
+      headSha: f.git.conflictReport.headSha,
+      targetSha: baseSha,
+      choices: [{ path: "src/config.ts", choice: "left" }],
+    });
+    assert.deepEqual(choice.result.choices, [
+      { path: "src/config.ts", choice: "left" },
+    ]);
+    assert.equal((await f.store.read()).pulls[0].status, "OPEN");
+    assert.equal(f.git.mergeCalls, 0);
+  } finally {
+    await f.app.close();
+  }
+});
+
+test("中断的初始化可通过对账补齐控制分支和保护，不重复导入", async () => {
+  const f = await setup();
+  try {
+    const original = f.git.createProject.bind(f.git);
+    f.git.createProject = async (p, files) => {
+      const r = await original(p, files);
+      throw Error("初始化响应丢失");
+    };
+    assert.equal(
+      (await f.call("project.create", { name: "初始化恢复" })).status,
+      500,
+    );
+    const p = (await f.store.read()).projects[0];
+    assert.equal(p.status, "UNKNOWN");
+    assert.equal(
+      (await f.call("repository.reconcile", { projectId: p.id })).status,
+      200,
+    );
+    assert.equal((await f.store.read()).projects[0].status, "ACTIVE");
+    assert.equal(f.git.projectsCreated, 1);
+  } finally {
+    await f.app.close();
+  }
 });

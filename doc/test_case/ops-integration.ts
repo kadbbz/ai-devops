@@ -5,11 +5,13 @@ import { promisify } from "node:util";
 import { writeFile } from "node:fs/promises";
 const exec = promisify(execFile),
   container = process.env.DEVOPS_TEST_CONTAINER || "ai-native-verify-devops-1";
-const image = "ai-native-devops:local",
-  backupVolume = "ai-native-verify_backup";
+const image = "ai-native-devops:local";
 const docker = async (args: string[]) =>
   (await exec("docker", args, { timeout: 240000, maxBuffer: 8 * 1024 * 1024 }))
     .stdout;
+const backupVolume = JSON.parse(
+  await docker(["inspect", container]),
+)[0].Mounts.find((m: any) => m.Destination === "/backup").Name;
 const read = async (path: string) =>
   JSON.parse(await docker(["exec", container, "cat", path]));
 // 最终镜像在全新空卷一次启动，无提前写入配置或账号。
@@ -164,14 +166,14 @@ console.log(JSON.stringify({apiPortListening, gatewayStatus: response.status}));
       "node",
       "--input-type=module",
       "-e",
-      `import fs from 'node:fs';import {MysqlStore} from '/app/dist/store.js';const c=JSON.parse(fs.readFileSync('/data/secrets/devops.json'));const store=new MysqlStore(c.databaseUrl,c.auditKey);const s=await store.read();console.log(JSON.stringify({sessions:s.sessions.length,activeCredentials:s.credentials.filter(x=>!x.revoked).length,projects:s.projects.length,intents:s.intents.length,closed:s.deliveries.filter(x=>x.stage==='CLOSED').length,confirmed:s.projects.filter(x=>x.production?.confirmed).length}));await store.close();`,
+      `import fs from 'node:fs';import {MysqlStore} from '/app/dist/store.js';const c=JSON.parse(fs.readFileSync('/data/secrets/devops.json'));const store=new MysqlStore(c.databaseUrl,c.auditKey);const s=await store.read();console.log(JSON.stringify({sessions:s.sessions.length,activeCredentials:s.credentials.filter(x=>!x.revoked).length,projects:s.projects.length,requirements:s.requirements.length,versions:s.versions.length}));await store.close();`,
     ]),
   );
   assert.equal(counts.sessions, 0);
   assert.equal(counts.activeCredentials, 0);
-  assert.equal(counts.confirmed, 0);
+
   assert.ok(counts.projects > 0);
-  assert.ok(counts.closed > 0);
+  assert.ok(counts.versions > 0);
   const report = {
     at: new Date().toISOString(),
     backupId: latest.id,
@@ -187,8 +189,8 @@ console.log(JSON.stringify({apiPortListening, gatewayStatus: response.status}));
       "MySQL/HMAC审计链",
       "Git fsck/refs",
       "撤销会话与委托",
-      "生产基线暂停",
-      "历史关闭交付保留",
+      "需求与版本保留",
+      "Git 标签保留",
       "演练不启动Web",
     ],
   };

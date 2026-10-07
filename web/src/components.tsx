@@ -103,39 +103,6 @@ export function Blank({
     </Card>
   );
 }
-export function JsonEditor({
-  initial,
-  onSave,
-  title,
-  description,
-}: {
-  initial: any;
-  onSave: (value: any) => Promise<any>;
-  title: string;
-  description?: string;
-}) {
-  const [value, setValue] = useState(JSON.stringify(initial, null, 2));
-  return (
-    <ActionForm
-      title={title}
-      onSubmit={() => onSave(JSON.parse(value))}
-      button="保存草稿"
-    >
-      <p className="muted">
-        {description ||
-          "草稿保存后需要人类签发才能生效。可由 agent 通过文件协议提交同样的结构。"}
-      </p>
-      <Input.TextArea
-        aria-label={title}
-        className="json-editor"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        autoSize={{ minRows: 22, maxRows: 45 }}
-        spellCheck={false}
-      />
-    </ActionForm>
-  );
-}
 export function ActionForm({
   title,
   children,

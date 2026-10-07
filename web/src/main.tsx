@@ -22,11 +22,11 @@ import {
   Alert,
   Form,
   Input,
-  Steps,
   Timeline,
   Typography,
-  Checkbox,
   Segmented,
+  Radio,
+  Popconfirm,
 } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import AppstoreOutlined from "@ant-design/icons/AppstoreOutlined";
@@ -57,14 +57,11 @@ import {
   PageTitle,
   Code,
   Blank,
-  JsonEditor,
   ActionForm,
   Field,
   Detail,
 } from "./components";
-import { projectDefaults, newPlan, newMaterials } from "./templates";
 import "./style.css";
-import { PlanEditor, MaterialsEditor, SystemEditorForm } from "./editors";
 const Ctx = createContext<any>(null);
 const useData = () => useContext(Ctx);
 function Application() {
@@ -116,27 +113,27 @@ function Application() {
             <span>序</span> DevOps
           </div>
           <h1>
-            让每一次交付，
+            让每一次版本，
             <br />
             都有据可循。
           </h1>
           <p>
-            从意图到实际结果。
+            从需求到每一次变更。
             <br />
-            人类掌握决策，Agent 各司其职。
+            IDE 专注实现，DevOps 管理需求与版本。
           </p>
           <div className="orbit">
-            <div>意图</div>
+            <div>需求</div>
             <i />
-            <div>证据</div>
+            <div>变更</div>
             <i />
-            <div>交付</div>
+            <div>版本</div>
           </div>
           <small>AI NATIVE DEVELOPMENT · HUMAN IN CONTROL</small>
         </div>
         <div className="login-panel">
           <Tag color="purple">一个账号 · 同一工作区</Tag>
-          <h2>进入你的交付工作台</h2>
+          <h2>进入你的版本工作台</h2>
           <p>
             使用统一账号和用户名密码登录。IDE 的短时 Git 凭证也由此账号授权。
           </p>
@@ -146,11 +143,11 @@ function Application() {
           </Button>
           <p className="login-help">
             内置管理员账号为 <code>admin</code>，初始密码为 <code>admin</code>。
-            首次使用默认密码登录后会提示修改密码，也可以暂时忽略。
+            每次使用默认密码登录后会提示修改密码，也可以暂时忽略。
           </p>
           <div className="login-note">
             <SafetyCertificateOutlined aria-hidden="true" />{" "}
-            所有分支、合并和签发均有审计记录
+            所有分支、合并和标签均有审计记录
           </div>
         </div>
       </div>
@@ -185,13 +182,13 @@ function Application() {
           />
           <nav>
             <NavLink to="/" end>
-              <AppstoreOutlined aria-hidden="true" /> 待办与 Intent
+              <AppstoreOutlined aria-hidden="true" /> 需求
             </NavLink>
-            <NavLink to="/deliveries">
-              <BranchesOutlined aria-hidden="true" /> PR 与组合交付
+            <NavLink to="/branches">
+              <BranchesOutlined aria-hidden="true" /> 分支与合并
             </NavLink>
-            <NavLink to="/operations">
-              <RocketOutlined aria-hidden="true" /> 发布与运行
+            <NavLink to="/versions">
+              <RocketOutlined aria-hidden="true" /> 版本
             </NavLink>
             <NavLink to="/settings">
               <SettingOutlined aria-hidden="true" /> 项目与授权
@@ -203,6 +200,16 @@ function Application() {
               <NavLink to="/ops">
                 <AppstoreOutlined aria-hidden="true" /> 系统运维
               </NavLink>
+            )}
+            {session.user.admin && (
+              <>
+                <NavLink to="/skills">
+                  <CodeOutlined aria-hidden="true" /> 技能库
+                </NavLink>
+                <NavLink to="/templates">
+                  <ReadOutlined aria-hidden="true" /> 项目模板
+                </NavLink>
+              </>
             )}
           </nav>
           <div className="sidebar-bottom">
@@ -231,7 +238,7 @@ function Application() {
         <div className="main-shell">
           <div className="topbar">
             <span>
-              <span className="live-dot" /> 人类掌握决策 · 证据驱动交付
+              <span className="live-dot" /> 需求清晰 · 版本可追溯
             </span>
             <Space>
               <span className="muted">Asia/Shanghai</span>
@@ -290,16 +297,21 @@ function Application() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/projects/new" element={<ProjectForm />} />
-              <Route path="/intents/new" element={<IntentForm />} />
-              <Route path="/intents/:id" element={<IntentDetail />} />
-              <Route path="/intents/:id/:editor" element={<IntentEditor />} />
-              <Route path="/gate/:kind/:id/:gate" element={<GatePage />} />
-              <Route path="/deliveries" element={<Deliveries />} />
-              <Route path="/deliveries/:id" element={<DeliveryDetail />} />
-              <Route path="/deliveries/:id/system" element={<SystemEditor />} />
-              <Route path="/merge/:id" element={<MergePage />} />
-              <Route path="/operations" element={<Operations />} />
-              <Route path="/operations/:id" element={<OperationDetail />} />
+              <Route path="/skills" element={<Skills />} />
+              <Route path="/skills/new" element={<SkillForm />} />
+              <Route path="/skills/:id" element={<SkillForm />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/templates/new" element={<TemplateForm />} />
+              <Route path="/templates/:id" element={<TemplateForm />} />
+              <Route path="/requirements/new" element={<RequirementForm />} />
+              <Route path="/requirements/:id" element={<RequirementForm />} />
+              <Route path="/branches" element={<Branches />} />
+              <Route path="/branches/new" element={<BranchForm />} />
+              <Route path="/branches/:id/delete" element={<BranchDelete />} />
+              <Route path="/pulls/new/:id" element={<PullForm />} />
+              <Route path="/pulls/:id" element={<PullDetail />} />
+              <Route path="/versions" element={<Versions />} />
+              <Route path="/versions/new" element={<VersionForm />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/credentials/new" element={<CredentialForm />} />
               <Route path="/users/new" element={<UserForm />} />
@@ -321,122 +333,106 @@ function Application() {
     </Ctx.Provider>
   );
 }
+const options = (values: string[]) =>
+  values.map((value) => ({ value, label: label(value) }));
+const canWrite = (project: Row, session: any) =>
+  project?.members[session.user.id] &&
+  project.members[session.user.id] !== "observer";
+function NoProject() {
+  return (
+    <Blank
+      title="先建立一个项目"
+      description="创建空仓库，或从压缩包导入已有项目。"
+      link="/projects/new"
+      button="创建或导入项目"
+    />
+  );
+}
 function Home() {
   const { w, project, session } = useData(),
-    [filter, setFilter] = useState("全部");
-  if (!w) return null;
-  const intents = w.intents.filter((i: Row) => i.projectId === project?.id);
-  const blocked = intents.filter((i: Row) => i.control !== "ACTIVE");
-  const displayed = intents.filter(
-    (i: Row) =>
-      filter === "全部" ||
-      (filter === "待确认"
-        ? ["DRAFT", "PR_OPEN"].includes(i.stage)
-        : filter === "受阻"
-          ? i.control !== "ACTIVE"
-          : i.stage === "MERGED"),
-  );
+    [filter, setFilter] = useState("ALL"),
+    [search, setSearch] = useState("");
+  const rows: Row[] =
+    w?.requirements.filter((r: Row) => r.projectId === project?.id) || [];
   return (
     <>
       <PageTitle
-        eyebrow="WORKSPACE / 工作台"
-        title={project ? `${project.name}，有序向前` : "从一个项目开始"}
-        description="看清下一步，确认值得交付的改变。"
+        title="需求"
+        description="记录要解决的问题，让 IDE Agent 接着完成实现、测试与发布。"
         action={
           <Space>
-            {session.user.admin && (
-              <Link to="/projects/new">
-                <Button>新建项目</Button>
-              </Link>
-            )}
-            {project && (
-              <Link to="/intents/new">
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined aria-hidden="true" />}
-                >
-                  创建 Intent
-                </Button>
+            <Link to="/projects/new">
+              <Button>创建或导入项目</Button>
+            </Link>
+            {project && canWrite(project, session) && (
+              <Link to="/requirements/new">
+                <Button type="primary">新建需求</Button>
               </Link>
             )}
           </Space>
         }
       />
       {!project ? (
-        <Blank
-          title="工作区准备就绪"
-          description="创建项目后，登记第一个目标。方案、证据与交付将在这里连接起来。"
-          link={session.user.admin ? "/projects/new" : undefined}
-          button="创建第一个项目"
-        />
+        <NoProject />
       ) : (
         <>
           <div className="overview">
             <Card className="overview-primary">
-              <span className="eyebrow">当前生产</span>
-              <h2>
-                {project.production?.confirmed
-                  ? shortSha(project.production.actualSha)
-                  : "等待生产核验"}
-              </h2>
-              <p>
-                {project.production?.confirmed
-                  ? "实际版本已确认"
-                  : "由 IDE 预设逻辑报告版本，人类完成确认"}
-              </p>
-              <Tag>{project.environment}</Tag>
+              <span className="eyebrow">当前项目</span>
+              <h2>{project.name}</h2>
+              <p>每一项需求，都可以关联分支和版本。</p>
             </Card>
-            <Metric
-              title="进行中的 Intent"
-              value={intents.filter((i: Row) => i.stage !== "MERGED").length}
-              hint="每个目标独立验收"
-            />
-            <Metric
-              title="等待人类决定"
-              value={
-                intents.filter((i: Row) =>
-                  ["DRAFT", "PR_OPEN"].includes(i.stage),
-                ).length
-              }
-              hint="确认目标或审查合并"
-            />
-            <Metric
-              title="需要处理"
-              value={blocked.length}
-              hint="未知、失效与异常"
-            />
+            <Card title="进行中">
+              <h2>{rows.filter((r) => r.status === "IN_PROGRESS").length}</h2>
+            </Card>
+            <Card title="已完成">
+              <h2>{rows.filter((r) => r.status === "DONE").length}</h2>
+            </Card>
           </div>
-          {blocked.length > 0 && (
-            <Alert
-              className="section-gap"
-              type="warning"
-              message="有交付需要人类处理"
-              description="先核验实际结果，再决定恢复路径。"
-              showIcon
-            />
-          )}
-          <div className="section-head">
-            <h2>
-              我的 Intent <span>{intents.length}</span>
-            </h2>
+          <div className="list-tools">
             <Segmented
               value={filter}
-              onChange={setFilter}
-              options={["全部", "待确认", "受阻", "已合并"]}
+              onChange={(v) => setFilter(String(v))}
+              options={[
+                { value: "ALL", label: "全部" },
+                ...options(["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"]),
+              ]}
+            />
+            <Input.Search
+              aria-label="搜索需求"
+              placeholder="搜索需求"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ maxWidth: 260 }}
             />
           </div>
-          {displayed.length ? (
-            <div className="card-grid">
-              {displayed.map((i: Row) => (
-                <IntentCard key={i.id} row={i} />
+          <div className="card-grid">
+            {rows
+              .filter(
+                (r) =>
+                  (filter === "ALL" || r.status === filter) &&
+                  r.title.includes(search),
+              )
+              .map((r) => (
+                <Link key={r.id} to={"/requirements/" + r.id}>
+                  <Card hoverable title={r.title}>
+                    <Space>
+                      <Status value={r.status} />
+                      <Tag>{label(r.kind)}</Tag>
+                      <Tag>优先级：{label(r.priority)}</Tag>
+                    </Space>
+                    <p className="card-excerpt">
+                      {r.description || "尚未填写说明"}
+                    </p>
+                    <small className="muted">更新于 {date(r.updatedAt)}</small>
+                  </Card>
+                </Link>
               ))}
-            </div>
-          ) : (
+          </div>
+          {rows.length === 0 && (
             <Blank
-              title="这里还没有 Intent"
-              description="一个清晰的目标，是一次可靠交付的起点。"
-              link="/intents/new"
-              button="创建 Intent"
+              title="还没有需求"
+              description="先写清目标与预期结果，再交给 IDE 开始工作。"
             />
           )}
         </>
@@ -444,764 +440,1039 @@ function Home() {
     </>
   );
 }
-function Metric({
-  title,
-  value,
-  hint,
-}: {
-  title: string;
-  value: number;
-  hint: string;
-}) {
+function Skills() {
+  const { w, refresh, session } = useData();
+  if (!session.user.admin)
+    return <Blank title="没有权限" description="技能库由平台管理员统一维护。" link="/" button="返回工作台" />;
   return (
-    <Card className="metric">
-      <span>{title}</span>
-      <strong>{value.toString().padStart(2, "0")}</strong>
-      <small>{hint}</small>
-    </Card>
+    <>
+      <PageTitle
+        title="技能库"
+        description="维护可复用的项目技能包，模板会把选中的技能复制到项目 skill 文件夹。"
+        action={
+          <Link to="/skills/new">
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />}>
+              新建技能
+            </Button>
+          </Link>
+        }
+      />
+      <div className="card-grid">
+        {w.skills.map((skill: Row) => (
+          <Card key={skill.id} title={skill.name} extra={<Tag color="purple">{skill.slug}</Tag>}>
+            <p>{skill.description || "暂无说明"}</p>
+            <p className="muted">修订 {skill.revision} · 必须包含 SKILL.md</p>
+            <Space>
+              <Link to={`/skills/${skill.id}`}><Button>编辑</Button></Link>
+              <Popconfirm
+                title="删除这个技能？"
+                description="已被模板使用的技能不能删除。"
+                onConfirm={async () => { await act("skill.delete", { id: skill.id }); await refresh(); }}
+              >
+                <Button danger>删除</Button>
+              </Popconfirm>
+            </Space>
+          </Card>
+        ))}
+      </div>
+      {!w.skills.length && <Blank title="技能库为空" description="先上传一个包含 SKILL.md 的技能包。" link="/skills/new" button="新建技能" />}
+    </>
   );
 }
-function IntentCard({ row: i }: { row: Row }) {
+function SkillForm() {
+  const { id } = useParams(),
+    { w, refresh, session } = useData(),
+    nav = useNavigate(),
+    [file, setFile] = useState<File>();
+  const row = w.skills.find((skill: Row) => skill.id === id);
+  if (!session.user.admin)
+    return <Blank title="没有权限" description="技能库由平台管理员统一维护。" link="/" button="返回工作台" />;
+  if (id && !row) return <Blank title="技能不存在" link="/skills" button="返回技能库" />;
   return (
-    <Link className="card-link" to={"/intents/" + i.id}>
-      <Card hoverable>
-        <div className="card-top">
-          <Tag>{label(i.kind)}</Tag>
-          <Status value={i.control !== "ACTIVE" ? i.control : i.stage} />
-        </div>
-        <h3>{i.title}</h3>
-        <p className="two-lines">{i.description}</p>
-        <div className="card-bottom">
-          <span>
-            {label(i.risk)} · {shortSha(i.sourceSha)}
-          </span>
-          <ArrowRightOutlined aria-hidden="true" />
-        </div>
-      </Card>
-    </Link>
+    <>
+      <PageTitle
+        title={id ? "编辑技能" : "新建技能"}
+        description="技能包是可复用的说明、规范和辅助文件，平台不会执行其中的代码。"
+        back="/skills"
+      />
+      <ActionForm
+        key={id || "new-skill"}
+        title="技能信息"
+        button={id ? "保存技能" : "上传技能"}
+        initialValues={row || { description: "" }}
+        onSubmit={async (v) => {
+          const body: any = { ...v };
+          if (id) {
+            body.id = id;
+            body.revision = row.revision;
+          }
+          if (file) {
+            if (file.size > 8 * 1024 * 1024) throw Error("技能包不能超过 8 MiB");
+            body.archiveName = file.name;
+            body.archiveBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result).split(",")[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+          } else if (!id) throw Error("请选择技能压缩包");
+          return act(id ? "skill.update" : "skill.create", body);
+        }}
+        onDone={async () => { await refresh(); nav("/skills"); }}
+      >
+        <Field name="name" title="技能名称" placeholder="例如：Node API 规范" />
+        <Field name="slug" title="技能标识（选填）" required={false} placeholder="留空自动生成" />
+        <Field name="description" title="技能说明" area required={false} placeholder="说明适用场景和边界" />
+        <Form.Item label={id ? "替换技能包（选填）" : "技能压缩包"} required={!id}>
+          <input aria-label="技能压缩包" type="file" onChange={(e) => setFile(e.target.files?.[0])} />
+          <p className="muted">文件后缀不限，内容须包含根 SKILL.md；最多 8 MiB。</p>
+        </Form.Item>
+      </ActionForm>
+    </>
+  );
+}
+function Templates() {
+  const { w, refresh, session } = useData();
+  if (!session.user.admin)
+    return <Blank title="没有权限" description="项目模板由平台管理员统一维护。" link="/" button="返回工作台" />;
+  return (
+    <>
+      <PageTitle
+        title="项目模板"
+        description="模板定义初始 agent.md 和项目要携带的技能清单。"
+        action={<Link to="/templates/new"><Button type="primary" icon={<PlusOutlined aria-hidden="true" />}>新建模板</Button></Link>}
+      />
+      <div className="card-grid">
+        {w.templates.map((template: Row) => (
+          <Card key={template.id} title={template.name} extra={template.system ? <Tag>系统</Tag> : <Tag color="purple">{template.slug}</Tag>}>
+            <p>{template.description || "项目初始协作约定"}</p>
+            <Space wrap>{template.skillIds.map((id: string) => <Tag key={id}>{w.skills.find((skill: Row) => skill.id === id)?.name || id}</Tag>)}</Space>
+            <p className="muted">{template.skillIds.length} 个技能 · 修订 {template.revision}</p>
+            {!template.system && <Space><Link to={`/templates/${template.id}`}><Button>编辑</Button></Link><Popconfirm title="删除这个模板？" description="已用于项目的模板不能删除。" onConfirm={async () => { await act("template.delete", { id: template.id }); await refresh(); }}><Button danger>删除</Button></Popconfirm></Space>}
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}
+function TemplateForm() {
+  const { id } = useParams(),
+    { w, refresh, session } = useData(),
+    nav = useNavigate(),
+    row = w.templates.find((template: Row) => template.id === id);
+  if (!session.user.admin)
+    return <Blank title="没有权限" description="项目模板由平台管理员统一维护。" link="/" button="返回工作台" />;
+  if (row?.system) return <Blank title="系统模板不可编辑" description="可以复制系统模板的内容创建自己的项目模板。" link="/templates" button="返回模板" />;
+  if (id && !row) return <Blank title="模板不存在" link="/templates" button="返回模板" />;
+  return (
+    <>
+      <PageTitle title={id ? "编辑项目模板" : "新建项目模板"} description="每个模板必须有 agent.md，并明确项目初始携带的技能清单。" back="/templates" />
+      <ActionForm
+        key={id || "new-template"}
+        title="模板内容"
+        button={id ? "保存模板" : "创建模板"}
+        initialValues={row || { agentMd: "# 项目协作约定\n", skillIds: [] }}
+        onSubmit={(v) => act(id ? "template.update" : "template.create", { ...v, ...(id ? { id, revision: row.revision } : {}) })}
+        onDone={async () => { await refresh(); nav("/templates"); }}
+      >
+        <Field name="name" title="模板名称" placeholder="例如：Node 服务" />
+        <Field name="slug" title="模板标识（选填）" required={false} placeholder="留空自动生成" />
+        <Form.Item name="skillIds" label="项目技能清单">
+          <Select mode="multiple" placeholder="选择要复制到 skill 文件夹的技能" options={w.skills.map((skill: Row) => ({ value: skill.id, label: `${skill.name} · ${skill.slug}` }))} />
+        </Form.Item>
+        <Form.Item name="agentMd" label="agent.md" rules={[{ required: true, message: "请填写 agent.md" }]}>
+          <Input.TextArea rows={14} placeholder="填写人类、DevOps Agent 与 IDE Agent 的协作约定" />
+        </Form.Item>
+        <p className="muted">创建项目时会把 agent.md、skill/manifest.json 和选中的 skill/&lt;技能标识&gt;/ 文件复制到初始 Git 提交。</p>
+      </ActionForm>
+    </>
   );
 }
 function ProjectForm() {
-  const { refresh, selectProject } = useData(),
-    nav = useNavigate();
+  const { refresh, selectProject, w } = useData(),
+    nav = useNavigate(),
+    [mode, setMode] = useState("create"),
+    [file, setFile] = useState<File>();
   return (
     <>
       <PageTitle
-        title="创建项目"
-        description="建立统一的代码入口、环境和固定验收命令。"
+        title="创建或导入项目"
+        description="从一个名字开始，也可以保留现有项目的全部源码。"
         back="/"
       />
-      <ActionForm
-        title="项目基础与执行约定"
-        initialValues={projectDefaults}
-        button="创建项目与受保护仓库"
-        onSubmit={(v) => act("project.create", v)}
-        onDone={async (r) => {
-          await refresh();
-          selectProject(r.id);
-          nav("/");
-        }}
-      >
-        <div className="form-grid">
-          <Field name="name" title="项目名称" />
-          <Field name="slug" title="仓库标识" placeholder="如 ticket-service" />
-          <Field name="environment" title="发布环境" />
-          <Field name="testEnvironment" title="隔离验收环境" />
-          <Field name="runnerId" title="验收 Runner 身份名称" />
-          <Field name="toolVersion" title="固定工具版本" />
-          <Field name="apiCommand" title="API 命令 ID" />
-          <Field name="e2eCommand" title="E2E 命令 ID" />
-          <Field name="configVersion" title="配置版本" />
-          <Field name="policyVersion" title="策略版本" />
-        </div>
-      </ActionForm>
-    </>
-  );
-}
-function IntentForm() {
-  const { project, refresh } = useData(),
-    nav = useNavigate();
-  if (!project) return <Blank title="请先选择项目" link="/" />;
-  return (
-    <>
-      <PageTitle
-        title="登记新的 Intent"
-        description="先描述想解决的问题，再由点方案和应用方案确定执行范围。"
-        back="/"
+      <Segmented
+        className="section-gap"
+        value={mode}
+        onChange={(v) => setMode(String(v))}
+        options={[
+          { label: "创建空项目", value: "create" },
+          { label: "导入压缩包", value: "import" },
+        ]}
       />
       <ActionForm
-        title="目标与风险"
-        initialValues={{ kind: "feature", risk: "low" }}
-        button="创建目标"
-        onSubmit={(v) => act("intent.create", { ...v, projectId: project.id })}
-        onDone={async (r) => {
+        key={mode}
+        title={mode === "import" ? "导入已有项目" : "项目基本信息"}
+        button={mode === "import" ? "导入项目" : "创建项目"}
+        initialValues={mode === "create" ? { templateId: "template_default" } : undefined}
+        onSubmit={async (v) => {
+          const body: any = {
+            name: v.name,
+            ...(v.slug ? { slug: v.slug } : {}),
+            ...(mode === "create" && v.templateId ? { templateId: v.templateId } : {}),
+          };
+          if (mode === "import") {
+            if (!file) throw Error("请选择压缩包");
+            if (file.size > 32 * 1024 * 1024)
+              throw Error("压缩包不能超过 32 MiB");
+            body.archiveName = file.name;
+            body.archiveBase64 = await new Promise<string>(
+              (resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () =>
+                  resolve(String(reader.result).split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              },
+            );
+          }
+          return act(
+            mode === "import" ? "project.import" : "project.create",
+            body,
+          );
+        }}
+        onDone={async (p) => {
           await refresh();
-          nav("/intents/" + r.id);
+          selectProject(p.id);
+          nav("/settings");
         }}
       >
+        <Field name="name" title="项目名称" placeholder="例如：客户服务平台" />
         <Field
-          name="title"
-          title="目标名称"
-          placeholder="例如：避免重复提交产生多张工单"
+          name="slug"
+          title="仓库标识（选填）"
+          required={false}
+          placeholder="留空自动生成；填写时使用小写字母、数字和连字符"
         />
-        <Field name="description" title="背景与预期结果" area />
-        <div className="form-grid">
-          <Form.Item name="kind" label="变更类型">
+        {mode === "create" && (
+          <Form.Item name="templateId" label="项目模板">
             <Select
-              options={[
-                "feature",
-                "defect",
-                "hotfix",
-                "migration",
-                "config",
-                "security",
-              ].map((v) => ({ value: v, label: label(v) }))}
-            />
-          </Form.Item>
-          <Form.Item name="risk" label="风险等级">
-            <Select
-              options={["low", "medium", "high"].map((v) => ({
-                value: v,
-                label: label(v),
+              options={w.templates.map((template: Row) => ({
+                value: template.id,
+                label: `${template.name}${template.system ? " · 系统默认" : ` · ${template.skillIds.length} 个技能`}`,
               }))}
             />
           </Form.Item>
-        </div>
-        <Field
-          name="incident"
-          title="生产事件编号（热修复必填）"
-          required={false}
-        />
-      </ActionForm>
-    </>
-  );
-}
-function IntentDetail() {
-  const { id } = useParams(),
-    { w, refresh } = useData(),
-    i = w.intents.find((r: Row) => r.id === id);
-  if (!i) return <Blank title="Intent 不存在" />;
-  const evidence = w.evidence.filter((e: Row) => e.subjectId === id);
-  return (
-    <>
-      <PageTitle
-        title={i.title}
-        description={i.description}
-        back="/"
-        action={<Status value={i.control !== "ACTIVE" ? i.control : i.stage} />}
-      />
-      {i.agentDraft && (
-        <Card title="Agent 方案候选 · 尚未采纳" className="section-gap">
-          <Code value={i.agentDraft.candidate} />
-          <small>
-            {i.agentDraft.model} · {date(i.agentDraft.at)}
-          </small>
-        </Card>
-      )}
-      {i.reason && (
-        <Alert
-          className="section-gap"
-          type="warning"
-          message={i.reason}
-          showIcon
-        />
-      )}
-      <Card className="section-gap">
-        <Steps
-          current={[
-            "DRAFT",
-            "A_SIGNED",
-            "IMPLEMENTING",
-            "PR_OPEN",
-            "MERGED",
-          ].indexOf(i.stage)}
-          items={[
-            { title: "目标草稿" },
-            { title: "确认工作区" },
-            { title: "实现与验收" },
-            { title: "PR 审查" },
-            { title: "组合交付" },
-          ]}
-        />
-      </Card>
-      <div className="decision-grid">
-        <div>
-          <Card
-            title="目标与应用方案"
-            extra={<Link to={"/intents/" + id + "/plan"}>编辑草稿</Link>}
-          >
-            {i.plan ? (
-              <>
-                <h3>{i.plan.point.goal}</h3>
-                <Detail
-                  items={[
-                    ["范围", i.plan.point.scope.join("；")],
-                    ["非目标", i.plan.point.nonGoals.join("；")],
-                    ["责任人", i.plan.point.owner],
-                    [
-                      "状态改变",
-                      i.plan.application.changes
-                        .map((c: any) => `${c.object} · ${c.scope}`)
-                        .join("；"),
-                    ],
-                    ["恢复", i.plan.application.rollback],
-                  ]}
-                />
-                <details>
-                  <summary>完整方案与引用</summary>
-                  <Code value={i.plan} />
-                </details>
-              </>
-            ) : (
-              <Blank
-                title="还没有方案"
-                description="先准备点方案与应用方案，再签发工作区。"
-                link={"/intents/" + id + "/plan"}
-                button="准备方案"
-              />
-            )}
-          </Card>
-          <Card
-            title="验收材料"
-            className="section-gap"
-            extra={
-              i.snapshotId && (
-                <Link to={"/intents/" + id + "/materials"}>维护材料</Link>
-              )
-            }
-          >
-            {i.materials ? (
-              <Detail
-                items={[
-                  ["说明书", i.materials.manual],
-                  ["变更说明", i.materials.changelog],
-                  ["接口契约", i.materials.apiContract],
-                  ["数据准备", i.materials.dataPreparation],
-                  ["数据清理", i.materials.dataCleanup],
-                  ["偏离", i.materials.deviations],
-                ]}
-              />
-            ) : (
-              <p className="muted">
-                Gate A（方案确认）后，DevOps agent 提交文档、API/E2E
-                用例及数据准备/清理。
-              </p>
-            )}
-          </Card>
-          <Evidence rows={evidence} />
-        </div>
-        <div>
-          <Card title="下一步">
-            <p>签发固定目标，让 IDE 在确认范围内实现。</p>
-            <Link to={"/gate/intent/" + id + "/A"}>
-              <Button block type="primary" disabled={i.stage === "MERGED"}>
-                审阅 Gate A（方案确认）
-              </Button>
-            </Link>
-            <Link to={"/gate/intent/" + id + "/B"}>
-              <Button
-                className="section-gap"
-                block
-                disabled={!i.snapshotId || i.stage === "MERGED"}
-              >
-                审阅 Gate B（交付候选确认）
-              </Button>
-            </Link>
-            {i.pr && i.stage !== "MERGED" && (
-              <Link to={"/merge/" + id}>
-                <Button block className="section-gap">
-                  审查并合并 PR #{i.pr.number}
-                </Button>
-              </Link>
-            )}
-          </Card>
-          <Card title="确认工作区" className="section-gap">
-            <Detail
-              items={[
-                ["目标分支", i.targetBranch],
-                ["工作分支", i.branch],
-                ["基线", shortSha(i.baseSha)],
-                ["当前提交", shortSha(i.sourceSha)],
-                ["风险", label(i.risk)],
-                ["方案修订", i.planVersion],
-              ]}
-            />
-            {i.snapshotId && (
-              <Typography.Text copyable>{i.snapshotId}</Typography.Text>
-            )}
-          </Card>
-          <Card title="受控执行" className="section-gap">
-            <ActionButton
-              text="生成方案候选"
-              disabled={i.stage === "MERGED"}
-              action={() => act("agent.draft", { id })}
-              refresh={refresh}
-            />
-
-            <ActionButton
-              text="登记 API / E2E 验收"
-              disabled={!i.build}
-              action={() => act("tests.request", { id })}
-              refresh={refresh}
+        )}
+        {mode === "import" && (
+          <Form.Item label="项目压缩包" required>
+            <input
+              aria-label="项目压缩包"
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0])}
             />
             <p className="muted">
-              构建由 IDE 预设逻辑执行；测试由隔离 Runner
-              执行，回执绑定当前提交。
+              支持 ZIP、TAR 及其 gzip / bzip2 / xz
+              压缩，文件后缀不限。项目根目录只需有非空 agent.md，最多 32 MiB。
             </p>
-          </Card>
-        </div>
-      </div>
+          </Form.Item>
+        )}
+        <p className="muted">
+          创建项目会从模板写入 agent.md 和技能清单；开发、测试和发布由 IDE 完成。
+        </p>
+      </ActionForm>
     </>
   );
 }
-function IntentEditor() {
-  const { id, editor } = useParams(),
-    { w, project, session, refresh } = useData(),
+function RequirementForm() {
+  const { id } = useParams(),
+    { w, project, refresh, session } = useData(),
     nav = useNavigate(),
-    i = w.intents.find((x: Row) => x.id === id);
-  if (!i) return null;
-  const isPlan = editor === "plan";
-  const Editor = isPlan ? PlanEditor : MaterialsEditor;
+    row = w.requirements.find((r: Row) => r.id === id);
+  if (id && !row) return <Blank title="需求不存在" />;
+  if (!project) return <NoProject />;
+  const p = id ? w.projects.find((p: Row) => p.id === row.projectId) : project;
   return (
     <>
       <PageTitle
-        title={isPlan ? "编辑点方案与应用方案" : "维护交付材料"}
-        description="内容会形成新的修订，相关旧批准和验收证据将失效。"
-        back={"/intents/" + id}
-      />
-      <Editor
-        initial={
-          isPlan
-            ? i.plan || newPlan(i.title, session.user.name, project.hotfixRefs)
-            : i.materials || newMaterials
+        title={id ? "需求详情" : "新建需求"}
+        description="直接记录需求与进展，保存后立即生效。"
+        back="/"
+        action={
+          id && canWrite(p, session) ? (
+            <Link to={"/branches/new?requirement=" + id}>
+              <Button>创建关联分支</Button>
+            </Link>
+          ) : undefined
         }
-        onSave={async (v) => {
-          await act(isPlan ? "plan.save" : "materials.save", {
-            id,
-            [isPlan ? "plan" : "materials"]: v,
-          });
+      />
+      <ActionForm
+        key={id || "new"}
+        title={row?.title || "需求内容"}
+        button="保存需求"
+        disabled={!canWrite(p, session)}
+        initialValues={
+          row || {
+            kind: "feature",
+            priority: "normal",
+            status: "OPEN",
+            description: "",
+          }
+        }
+        onSubmit={(v) =>
+          act(id ? "requirement.update" : "requirement.create", {
+            ...v,
+            ...(id ? { id, revision: row.revision } : { projectId: p.id }),
+          })
+        }
+        onDone={async () => {
           await refresh();
-          nav("/intents/" + id);
+          nav("/");
         }}
-      />
-    </>
-  );
-}
-function Evidence({ rows }: { rows: Row[] }) {
-  return (
-    <Card title="执行证据" className="section-gap">
-      {!rows.length ? (
-        <p className="muted">尚无执行证据。生成用例不代表执行通过。</p>
-      ) : (
-        <div className="evidence-list">
-          {rows.map((e) => (
-            <details key={e.id}>
-              <summary>
-                <strong>{e.kind?.toUpperCase()}</strong>
-                <Status value={e.status} />
-                <span>{date(e.createdAt)}</span>
-              </summary>
-              <Code value={e.log || e} />
-              <small>{e.operationId}</small>
-            </details>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-function GatePage() {
-  const { kind, id, gate } = useParams(),
-    { refresh } = useData(),
-    nav = useNavigate(),
-    [preview, setPreview] = useState<any>(),
-    [error, setError] = useState(""),
-    [step, setStep] = useState(0);
-  const load = () =>
-    api(`/preview/${kind}/${id}/${gate}`)
-      .then(setPreview)
-      .catch((e) => setError(e.message));
-  useEffect(() => {
-    void load();
-  }, [id, gate]);
-  const back = kind === "delivery" ? "/deliveries/" + id : "/intents/" + id;
-  const titles: Record<string, string> = {
-    A: "方案确认：签发目标并创建工作区",
-    B: "交付候选确认：签发交付并创建 PR",
-    C: "发布确认：签发发布输入",
-  };
-  return (
-    <>
-      <PageTitle
-        title={"Gate " + gate + " · " + titles[gate!]}
-        description="先审缺口与差异，再确认固定版本，最后记录你的决定。每道 Gate 都会记录固定对象和审查理由。"
-        back={back}
-      />
-      {error && <Alert type="error" message={error} />}
-      {!preview ? (
-        <Spin />
-      ) : (
-        <>
-          <Card className="section-gap">
-            <Steps
-              current={step}
-              items={[
-                { title: "差异与缺口" },
-                { title: "固定对象" },
-                { title: "签发决定" },
-              ]}
+      >
+        <Field name="title" title="需求标题" />
+        <Field
+          name="description"
+          title="需求说明"
+          area
+          required={false}
+          placeholder="目标、使用场景和预期结果"
+        />
+        <div className="form-grid">
+          <Form.Item name="kind" label="类型">
+            <Select options={options(["feature", "defect", "change"])} />
+          </Form.Item>
+          <Form.Item name="priority" label="优先级">
+            <Select options={options(["low", "normal", "high"])} />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select
+              options={options(["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"])}
             />
-          </Card>
-          {step === 0 && (
-            <div className="decision-grid">
-              <div>
-                <Card title="真实代码差异">
-                  <Code
-                    value={
-                      preview.diff || "此阶段确认目标与状态改变，不审批实现。"
-                    }
-                  />
-                </Card>
-                <Evidence rows={preview.evidence} />
-              </div>
-              <Card title="签发前检查">
-                {preview.gaps.length ? (
-                  <Alert
-                    type="warning"
-                    message="当前尚不可签发"
-                    description={
-                      <ul>
-                        {preview.gaps.map((g: string) => (
-                          <li key={g}>{g}</li>
-                        ))}
-                      </ul>
-                    }
-                  />
-                ) : (
-                  <Alert
-                    type="success"
-                    message="程序检查无缺口，等待人类审查"
-                  />
-                )}
-                <p className="muted">
-                  提交、材料或配置变化后，页面中的旧确认将被拒绝。
-                </p>
-              </Card>
-            </div>
-          )}
-          {step === 1 && (
-            <Card title="本次签发的固定内容">
-              <Detail
-                items={[
-                  ["环境", preview.project.environment],
-                  [
-                    "提交",
-                    preview.subject.sourceSha || preview.subject.baseSha,
-                  ],
-                  ["制品", preview.subject.build?.artifactDigest],
-                  ["配置", preview.project.configVersion],
-                  ["输入指纹", preview.fingerprint],
-                ]}
-              />
-              <Code
-                value={
-                  gate === "C" ? preview.subject.system : preview.subject.plan
-                }
-              />
-            </Card>
-          )}
-          {step === 2 && (
-            <ActionForm
-              title={
-                "记录 Gate " +
-                gate +
-                "（" +
-                titles[gate!].split("：")[0] +
-                "）决定"
-              }
-              button={titles[gate!]}
-              disabled={preview.gaps.length > 0}
-              onSubmit={async (v) => {
-                const r = await act(
-                  v.countersign
-                    ? "gate.c.review"
-                    : "gate." + gate!.toLowerCase(),
-                  {
-                    id,
-                    fingerprint: preview.fingerprint,
-                    reason: v.reason,
-                  },
-                );
-                await refresh();
-                nav(back);
-                return r;
-              }}
-            >
-              <Alert
-                type="info"
-                message={
-                  gate === "C"
-                    ? "本次只签发发布输入。IDE 预设逻辑发布后，还需实际版本回执。"
-                    : "你的账号和理由将与固定指纹一起写入审计。"
-                }
-              />
-              {gate === "C" && (
-                <Form.Item name="countersign" valuePropName="checked">
-                  <Checkbox>
-                    本次作为审查人会签（高风险需另一位负责人最终签发）
-                  </Checkbox>
-                </Form.Item>
-              )}
-              <Field name="reason" title="审查结论与理由" area />
-              <Form.Item
-                name="ack"
-                valuePropName="checked"
-                rules={[
-                  {
-                    validator: (_, v) =>
-                      v
-                        ? Promise.resolve()
-                        : Promise.reject(new Error("请确认已审查固定对象")),
-                  },
-                ]}
-              >
-                <Checkbox>我已审查当前目标、证据、影响范围和恢复方式</Checkbox>
-              </Form.Item>
-            </ActionForm>
-          )}
-          <div className="gate-nav">
-            <Button disabled={!step} onClick={() => setStep(step - 1)}>
-              上一步
-            </Button>
-            {step < 2 && (
-              <Button type="primary" onClick={() => setStep(step + 1)}>
-                {step === 0 ? "核对固定对象" : "填写签发决定"}{" "}
-                <ArrowRightOutlined aria-hidden="true" />
-              </Button>
-            )}
-          </div>
-        </>
+          </Form.Item>
+        </div>
+      </ActionForm>
+      {row && (
+        <Card title="关联记录" className="section-gap">
+          <p>
+            分支：
+            {w.branches
+              .filter((b: Row) => b.requirementId === id)
+              .map((b: Row) => b.name)
+              .join("、") || "暂无"}
+          </p>
+          <p>
+            版本：
+            {w.versions
+              .filter((v: Row) => v.requirementIds.includes(id))
+              .map((v: Row) => v.name)
+              .join("、") || "暂无"}
+          </p>
+        </Card>
       )}
     </>
   );
 }
-function Deliveries() {
-  const { w, project } = useData();
-  const prs = w.intents.filter(
-      (i: Row) => i.projectId === project?.id && i.pr && i.stage !== "MERGED",
-    ),
-    deliveries = w.deliveries.filter((i: Row) => i.projectId === project?.id);
+function useRepository(projectId?: string) {
+  const [data, setData] = useState<any>(),
+    [error, setError] = useState("");
+  const reload = async () => {
+    if (!projectId) return;
+    try {
+      setData(await api("/projects/" + projectId + "/repository"));
+      setError("");
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+  useEffect(() => {
+    setData(undefined);
+    void reload();
+  }, [projectId]);
+  return { data, error, reload };
+}
+function Branches() {
+  const { w, project, session } = useData(),
+    { data, error, reload } = useRepository(project?.id);
+  if (!project) return <NoProject />;
+  const pulls = w.pulls.filter((r: Row) => r.projectId === project.id),
+    writable = canWrite(project, session);
   return (
     <>
       <PageTitle
-        title="从 PR 到组合交付"
-        description="每次合并改变目标提交。最终组合需要重新构建和验收。"
+        title="分支与合并"
+        description="从主线创建工作分支，在 IDE 完成开发，通过这里合并到 main。"
+        action={
+          writable ? (
+            <Link to="/branches/new">
+              <Button type="primary">创建分支</Button>
+            </Link>
+          ) : undefined
+        }
       />
-      <h2>待合并 PR</h2>
-      {prs.length ? (
-        <div className="card-grid">
-          {prs.map((i: Row) => (
-            <IntentCard key={i.id} row={i} />
-          ))}
-        </div>
-      ) : (
-        <Blank
-          title="暂无待合并 PR"
-          description="Gate B（交付候选确认）签发通过后，程序自动创建真实 PR。"
+      {error && (
+        <Alert
+          type="error"
+          message={error}
+          action={<Button onClick={reload}>重试</Button>}
         />
       )}
-      <h2 className="section-gap">组合候选</h2>
-      {deliveries.length ? (
+      <h2>工作分支</h2>
+      <div className="card-grid">
+        {data?.branches.map((b: any) => {
+          const row = w.branches.find(
+              (r: Row) =>
+                r.projectId === project.id &&
+                r.name === b.name &&
+                r.status === "ACTIVE",
+            ),
+            open =
+              row &&
+              pulls.find(
+                (r: Row) => r.branchId === row.id && r.status === "OPEN",
+              );
+          return (
+            <Card key={b.name} title={b.name}>
+              <Typography.Text copyable>{b.sha}</Typography.Text>
+              <p className="muted">
+                {["main", "devops/control"].includes(b.name)
+                  ? "受保护分支"
+                  : row?.requirementId
+                    ? w.requirements.find(
+                        (r: Row) => r.id === row.requirementId,
+                      )?.title
+                    : "独立工作分支"}
+              </p>
+              {row && writable && (
+                <Space wrap>
+                  {open ? (
+                    <Link to={"/pulls/" + open.id}>
+                      <Button>查看 PR</Button>
+                    </Link>
+                  ) : (
+                    <>
+                      <Link to={"/pulls/new/" + row.id}>
+                        <Button>创建 PR</Button>
+                      </Link>
+                      <Link to={"/branches/" + row.id + "/delete"}>
+                        <Button danger>删除分支</Button>
+                      </Link>
+                    </>
+                  )}
+                </Space>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+      {!data && !error && <Spin />}
+      <h2 className="section-gap">合并请求</h2>
+      {pulls.length ? (
         <div className="card-grid">
-          {[...deliveries].reverse().map((d: Row) => (
-            <Link key={d.id} className="card-link" to={"/deliveries/" + d.id}>
-              <Card hoverable>
-                <div className="card-top">
-                  <Tag>{d.targetBranch}</Tag>
-                  <Status value={d.stage} />
-                </div>
-                <h3>组合 {shortSha(d.sourceSha)}</h3>
-                <p>
-                  {d.intentIds.length} 项应用方案 · {date(d.createdAt)}
-                </p>
-                {d.reason && <p>{d.reason}</p>}
+          {pulls.map((r: Row) => (
+            <Link to={"/pulls/" + r.id} key={r.id}>
+              <Card hoverable title={r.title}>
+                <Tag color={r.status === "MERGED" ? "green" : "purple"}>
+                  {r.status === "OPEN" ? "待合并" : "已合并"}
+                </Tag>
+                <p>#{r.number} → main</p>
               </Card>
             </Link>
           ))}
         </div>
       ) : (
         <Blank
-          title="还没有组合交付"
-          description="在 DevOps 中合并第一个 PR 后自动生成。"
+          title="暂无合并请求"
+          description="IDE 提交代码后，从工作分支创建 PR。"
         />
       )}
     </>
   );
 }
-function DeliveryDetail() {
-  const { id } = useParams(),
-    { w, refresh } = useData(),
-    d = w.deliveries.find((x: Row) => x.id === id);
-  if (!d) return null;
+function BranchForm() {
+  const { w, project, refresh } = useData(),
+    nav = useNavigate(),
+    { data, error } = useRepository(project?.id),
+    selected = new URLSearchParams(useLocation().search).get("requirement");
+  if (!project) return <NoProject />;
+  const main = data?.branches.find((b: any) => b.name === "main");
   return (
     <>
       <PageTitle
-        title={"组合交付 · " + shortSha(d.sourceSha)}
-        description="以最终合并提交为准，审阅完整发布范围与实际结果。"
-        back="/deliveries"
-        action={<Status value={d.control === "ACTIVE" ? d.stage : d.control} />}
+        title="创建工作分支"
+        description="以当前 main 为基线。创建后即可在 IDE 开始开发。"
+        back="/branches"
       />
-      {d.reason && (
-        <Alert type="warning" message={d.reason} className="section-gap" />
-      )}
-      <div className="decision-grid">
-        <div>
-          <Card title="完整交付范围">
-            {d.intentIds.map((i: string) => {
-              const row = w.intents.find((x: Row) => x.id === i);
-              return (
-                <p key={i}>
-                  <Link to={"/intents/" + i}>{row?.title || i}</Link>
-                </p>
-              );
-            })}
-            <Detail
-              items={[
-                ["来源提交", d.sourceSha],
-                ["实际生产基线", d.baseSha],
-                ["目标分支", d.targetBranch],
-                ["制品", d.build?.artifactDigest],
-              ]}
-            />
-          </Card>
-          <Evidence rows={w.evidence.filter((e: Row) => e.subjectId === id)} />
-          <Card
-            title="系统方案"
-            extra={
-              <Link to={"/deliveries/" + id + "/system"}>编辑系统方案</Link>
-            }
-            className="section-gap"
-          >
-            {d.system ? (
-              <Code value={d.system} />
-            ) : (
-              <p>完成组合构建与验收后填写。</p>
-            )}
-          </Card>
-          {d.receipt && (
-            <Card title="实际发布回执" className="section-gap">
-              <Code value={d.receipt} />
-            </Card>
-          )}
-        </div>
-        <Card title="交付决策">
-          <Link to={"/gate/delivery/" + id + "/C"}>
-            <Button block type="primary" disabled={d.stage === "CLOSED"}>
-              审阅 Gate C（发布确认）
-            </Button>
-          </Link>
-          <ActionButton
-            text="登记组合 API / E2E"
-            disabled={!d.build}
-            action={() => act("tests.request", { id })}
-            refresh={refresh}
-          />
-          <p className="muted">
-            签发后由 IDE agent 请求发布，IDE
-            预设逻辑执行，平台按实际回执核验关闭。
-          </p>
-        </Card>
-      </div>
-    </>
-  );
-}
-function SystemEditor() {
-  const { id } = useParams(),
-    { w, refresh } = useData(),
-    nav = useNavigate(),
-    d = w.deliveries.find((x: Row) => x.id === id),
-    p = w.projects.find((x: Row) => x.id === d?.projectId);
-  if (!d) return null;
-  return (
-    <>
-      <PageTitle title="编辑系统方案" back={"/deliveries/" + id} />
-      <SystemEditorForm
-        initial={
-          d.system || {
-            sourceSha: d.sourceSha,
-            artifactDigest: d.build?.artifactDigest || "",
-            configVersion: p.configVersion,
-            environment: p.environment,
-            applications: d.intentIds,
-            sequence: [],
-            migrations: ["无"],
-            healthChecks: [],
-            rollback: "",
-            scope: [],
-          }
-        }
-        onSave={async (system) => {
-          await act("system.save", { id, system });
-          await refresh();
-          nav("/deliveries/" + id);
-        }}
-      />
-    </>
-  );
-}
-function MergePage() {
-  const { id } = useParams(),
-    { w, refresh } = useData(),
-    nav = useNavigate(),
-    i = w.intents.find((x: Row) => x.id === id),
-    [preview, setPreview] = useState<any>();
-  useEffect(() => {
-    api(`/preview/intent/${id}/B`)
-      .then(setPreview)
-      .catch(() => {});
-  }, [id]);
-  if (!i || !preview) return <Spin />;
-  return (
-    <>
-      <PageTitle
-        title={"合并 PR #" + i.pr?.number}
-        description="每次确认一个 PR。合并后，其他 PR 需要检查新的目标版本。"
-        back={"/intents/" + id}
-      />
-      <Card title="将要进入目标分支的改变">
-        <Detail
-          items={[
-            ["Intent", i.title],
-            ["来源", preview.subject.sourceSha],
-            ["目标分支", i.targetBranch],
-            ["目标提交", preview.subject.targetSha],
-          ]}
-        />
-        <Code value={preview.diff} />
-      </Card>
+      {error && <Alert type="error" message={error} />}
       <ActionForm
-        title="人工合并确认"
-        button="确认合并并创建组合候选"
-        disabled={
-          preview.gaps.length > 0 || preview.subject.pr?.status !== "OPEN"
-        }
+        title="分支信息"
+        button="创建分支"
+        disabled={!main}
+        initialValues={{ requirementId: selected || undefined }}
         onSubmit={(v) =>
-          act("merge", {
-            ids: [id],
-            targetSha: preview.subject.targetSha,
-            reason: v.reason,
+          act("branch.create", {
+            projectId: project.id,
+            baseSha: main.sha,
+            ...v,
           })
         }
-        onDone={async (d) => {
+        onDone={async () => {
           await refresh();
-          nav(d.intentIds ? "/deliveries/" + d.id : "/");
+          nav("/branches");
         }}
       >
-        <Field name="reason" title="合并理由" area />
-        {preview.gaps.length > 0 && (
-          <Alert type="warning" message={preview.gaps.join("；")} />
-        )}
+        <Field
+          name="name"
+          title="分支名称"
+          placeholder="feature/customer-import"
+        />
+        <Form.Item name="requirementId" label="关联需求（选填）">
+          <Select
+            allowClear
+            options={w.requirements
+              .filter((r: Row) => r.projectId === project.id)
+              .map((r: Row) => ({ value: r.id, label: r.title }))}
+          />
+        </Form.Item>
+        <p className="muted">基线 main · {shortSha(main?.sha)}</p>
       </ActionForm>
+    </>
+  );
+}
+function BranchDelete() {
+  const { id } = useParams(),
+    { w, refresh } = useData(),
+    nav = useNavigate(),
+    row = w.branches.find((r: Row) => r.id === id),
+    { data, error } = useRepository(row?.projectId);
+  if (!row) return <Blank title="分支不存在" />;
+  const head = data?.branches.find((b: any) => b.name === row.name);
+  return (
+    <>
+      <PageTitle title="删除工作分支" back="/branches" />
+      {error && <Alert type="error" message={error} />}
+      <ActionForm
+        title={row.name}
+        button="确认删除分支"
+        disabled={!head}
+        onSubmit={() => act("branch.delete", { id, headSha: head.sha })}
+        onDone={async () => {
+          await refresh();
+          nav("/branches");
+        }}
+      >
+        <p>
+          将删除远端分支引用。有待合并 PR
+          时不能删除；删除后若需要未合并提交，请先在 IDE 保留副本。
+        </p>
+        <Code value={head?.sha} />
+      </ActionForm>
+    </>
+  );
+}
+function PullForm() {
+  const { id } = useParams(),
+    { w, refresh } = useData(),
+    nav = useNavigate(),
+    branch = w.branches.find((r: Row) => r.id === id);
+  if (!branch) return <Blank title="分支不存在" />;
+  return (
+    <>
+      <PageTitle
+        title="创建合并请求"
+        back="/branches"
+        description={branch.name + " → main"}
+      />
+      <ActionForm
+        title="变更说明"
+        button="创建 PR"
+        initialValues={{
+          title:
+            w.requirements.find((r: Row) => r.id === branch.requirementId)
+              ?.title || branch.name,
+          description: "",
+        }}
+        onSubmit={(v) =>
+          act("pr.create", { projectId: branch.projectId, branchId: id, ...v })
+        }
+        onDone={async (r) => {
+          await refresh();
+          nav("/pulls/" + r.id);
+        }}
+      >
+        <Field name="title" title="标题" />
+        <Field name="description" title="说明" area required={false} />
+      </ActionForm>
+    </>
+  );
+}
+function PullDetail() {
+  const { id } = useParams(),
+    { w, session, refresh } = useData(),
+    [data, setData] = useState<any>(),
+    [error, setError] = useState(""),
+    [choices, setChoices] = useState<Record<string, "left" | "right">>({});
+  const load = async () => {
+    try {
+      setData(await api("/pulls/" + id));
+      setError("");
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, [id]);
+  if (!data)
+    return (
+      <>
+        {error ? (
+          <Alert
+            message={error}
+            type="error"
+            action={<Button onClick={load}>重试</Button>}
+          />
+        ) : (
+          <Spin />
+        )}
+      </>
+    );
+  const p = w.projects.find((p: Row) => p.id === data.projectId);
+  const conflicts: Row[] = data.conflicts || [],
+    hasConflicts = conflicts.length > 0,
+    canChoose = session.actor?.role === "human" && canWrite(p, session),
+    choicesComplete = conflicts.every((conflict) => choices[conflict.path]);
+  return (
+    <>
+      <PageTitle
+        title={data.title}
+        back="/branches"
+        description={"PR #" + data.number + " → main"}
+        action={<Button onClick={load}>刷新差异</Button>}
+      />
+      <Card title={data.merged ? "已合并" : "变更差异"}>
+        <Detail
+          items={[
+            ["工作分支", shortSha(data.headSha)],
+            ["当前主线", shortSha(data.targetSha)],
+            ["说明", data.description],
+          ]}
+        />
+        <Code value={data.diff || "当前没有差异"} />
+      </Card>
+      {!data.merged && hasConflicts && (
+        <Card
+          title="冲突差异：未执行合并"
+          className="section-gap conflict-card"
+        >
+          <Alert
+            type="warning"
+            showIcon
+            message="DevOps Agent 已检测到冲突"
+            description="左侧是当前 main，右侧是工作分支。请选择每个冲突点希望保留哪一侧；这里只记录你的选择，不会直接合并。IDE Agent 需要据此修改工作分支并重新推送。"
+          />
+          <div className="conflict-list">
+            {conflicts.map((conflict) => (
+              <Card key={conflict.id} size="small" title={conflict.path}>
+                <p>{conflict.summary}</p>
+                <div className="conflict-columns">
+                  <div>
+                    <div className="conflict-side-title">左侧 · main</div>
+                    <Code value={conflict.left ?? "该文件在左侧不存在"} />
+                  </div>
+                  <div>
+                    <div className="conflict-side-title">右侧 · 工作分支</div>
+                    <Code value={conflict.right ?? "该文件在右侧不存在"} />
+                  </div>
+                </div>
+                {canChoose ? (
+                  <Radio.Group
+                    aria-label={`选择 ${conflict.path} 的版本`}
+                    value={choices[conflict.path]}
+                    onChange={(event) =>
+                      setChoices((current) => ({
+                        ...current,
+                        [conflict.path]: event.target.value,
+                      }))
+                    }
+                  >
+                    <Radio value="left">选择左侧 main</Radio>
+                    <Radio value="right">选择右侧工作分支</Radio>
+                  </Radio.Group>
+                ) : (
+                  <p className="muted">只有人类成员可以记录左右选择。</p>
+                )}
+              </Card>
+            ))}
+          </div>
+          {canChoose && (
+            <ActionForm
+              title="记录人类选择"
+              button="保存选择，不合并"
+              disabled={!choicesComplete}
+              onSubmit={async () =>
+                act("pr.conflict.choice", {
+                  id,
+                  headSha: data.headSha,
+                  targetSha: data.targetSha,
+                  choices: conflicts.map((conflict) => ({
+                    path: conflict.path,
+                    choice: choices[conflict.path],
+                  })),
+                })
+              }
+              onDone={load}
+            >
+              <p className="muted">
+                保存后 PR 仍保持待合并。IDE Agent
+                读取选择并解决冲突后推送，页面会重新检测。
+              </p>
+            </ActionForm>
+          )}
+        </Card>
+      )}
+      {!data.merged && !hasConflicts && (
+        <ActionForm
+          title="合并到 main"
+          button="合并 PR"
+          disabled={!data.mergeable || !canWrite(p, session)}
+          onSubmit={() =>
+            act("pr.merge", {
+              id,
+              headSha: data.headSha,
+              targetSha: data.targetSha,
+            })
+          }
+          onDone={async () => {
+            await refresh();
+            await load();
+          }}
+        >
+          <p>将上方提交合并到主线。需求状态由你或 IDE Agent 单独更新。</p>
+          {!data.mergeable && (
+            <Alert
+              type="warning"
+              message="暂时无法合并：请在 IDE 解决冲突，或等待 Git 检查完成后刷新。"
+            />
+          )}
+        </ActionForm>
+      )}
+    </>
+  );
+}
+function Versions() {
+  const { w, project, session } = useData();
+  if (!project) return <NoProject />;
+  const rows = w.versions.filter((r: Row) => r.projectId === project.id);
+  return (
+    <>
+      <PageTitle
+        title="版本"
+        description="为主线提交建立不可变标签，记录版本包含的需求。版本记录不表示已部署。"
+        action={
+          canWrite(project, session) ? (
+            <Link to="/versions/new">
+              <Button type="primary">登记版本</Button>
+            </Link>
+          ) : undefined
+        }
+      />
+      {rows.length ? (
+        <div className="card-grid">
+          {rows.map((r: Row) => (
+            <Card key={r.id} title={r.name}>
+              <Typography.Text copyable>{r.sha}</Typography.Text>
+              <p className="preserve-lines">{r.notes || "暂无变更说明"}</p>
+              <Space wrap>
+                {r.requirementIds.map((id: string) => (
+                  <Link key={id} to={"/requirements/" + id}>
+                    <Tag color="purple">
+                      {w.requirements.find((q: Row) => q.id === id)?.title}
+                    </Tag>
+                  </Link>
+                ))}
+              </Space>
+              <p className="muted">{date(r.createdAt)}</p>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Blank
+          title="还没有版本"
+          description="合并完成后，为 main 提交创建第一个版本标签。"
+        />
+      )}
+    </>
+  );
+}
+function VersionForm() {
+  const { w, project, refresh } = useData(),
+    nav = useNavigate(),
+    { data, error } = useRepository(project?.id);
+  if (!project) return <NoProject />;
+  const main = data?.branches.find((r: any) => r.name === "main");
+  return (
+    <>
+      <PageTitle
+        title="登记版本"
+        back="/versions"
+        description="创建真实 Git 标签。登记后不可覆盖，发布由 IDE 完成。"
+      />
+      {error && <Alert type="error" message={error} />}{" "}
+      {main ? (
+        <ActionForm
+          key={main.sha}
+          title="版本信息"
+          button="创建版本标签"
+          initialValues={{ sha: main.sha, notes: "", requirementIds: [] }}
+          onSubmit={(v) =>
+            act("version.create", { projectId: project.id, ...v })
+          }
+          onDone={async () => {
+            await refresh();
+            nav("/versions");
+          }}
+        >
+          <Field name="name" title="版本名称" placeholder="v1.0.0" />
+          <Field name="sha" title="提交 SHA" />
+          <p className="muted">
+            默认当前 main，也可填写 main 历史中的完整提交 SHA。
+          </p>
+          <Field name="notes" title="变更说明" area required={false} />
+          <Form.Item name="requirementIds" label="包含需求（选填）">
+            <Select
+              mode="multiple"
+              options={w.requirements
+                .filter((r: Row) => r.projectId === project.id)
+                .map((r: Row) => ({ value: r.id, label: r.title }))}
+            />
+          </Form.Item>
+        </ActionForm>
+      ) : (
+        !error && <Spin />
+      )}
+    </>
+  );
+}
+function Settings() {
+  const { w, project, refresh, session } = useData();
+  if (!project) return <NoProject />;
+  const owner = project.members[session.user.id] === "owner";
+  return (
+    <>
+      <PageTitle
+        title="项目与授权"
+        description="同一账号连接 IDE 与 DevOps，所有远端 Git 操作均从此进入。"
+        action={
+          <Space>
+            <Link to="/projects/new">
+              <Button>创建或导入项目</Button>
+            </Link>
+            {session.user.admin && (
+              <Link to="/users/new">
+                <Button>创建统一账号</Button>
+              </Link>
+            )}
+            {canWrite(project, session) && (
+              <Link to="/credentials/new">
+                <Button type="primary">授权 IDE / Agent</Button>
+              </Link>
+            )}
+          </Space>
+        }
+      />
+      <Card title={project.name}>
+        <Detail
+          items={[
+            [
+              "Git 唯一入口",
+              <Typography.Text copyable>
+                {location.origin + "/git/" + project.slug + ".git"}
+              </Typography.Text>,
+            ],
+            [
+              "项目 ID",
+              <Typography.Text copyable>{project.id}</Typography.Text>,
+            ],
+            ["你的角色", label(project.members[session.user.id])],
+            ["职责", "DevOps 管理需求与版本；IDE 负责开发、全部测试和发布。"],
+          ]}
+        />
+        <p className="muted">
+          在 IDE 使用统一账号的用户名和下面签发的短时凭证作为 Git 密码。
+        </p>
+      </Card>
+      {(w.requests.some((r: Row) => r.projectId === project.id) ||
+        project.projectionPending ||
+        project.status === "UNKNOWN") && (
+        <Card title="仓库状态需要核对" className="section-gap">
+          <p>读取实际 Git 状态，核对上次未确定的操作并重新同步需求投影。</p>
+          <ActionButton
+            text="核对仓库"
+            action={() =>
+              act("repository.reconcile", { projectId: project.id })
+            }
+            refresh={refresh}
+          />
+        </Card>
+      )}
+      <h2 className="section-gap">我的委托</h2>
+      <div className="card-grid">
+        {w.credentials
+          .filter((r: Row) => r.projectId === project.id)
+          .map((c: Row) => (
+            <Card key={c.id} title={c.name}>
+              <Tag>{label(c.role)}</Tag>
+              <p>{c.revoked ? "已撤销" : "到期 " + date(c.expiresAt)}</p>
+              {!c.revoked && (
+                <ActionButton
+                  text="撤销凭证"
+                  action={() => act("credential.revoke", { id: c.id })}
+                  refresh={refresh}
+                />
+              )}
+            </Card>
+          ))}
+      </div>
+      <h2 className="section-gap">项目成员</h2>
+      <div className="card-grid">
+        {Object.entries(project.members).map(([id, role]) => (
+          <Card key={id}>
+            <strong>
+              {w.users.find((u: Row) => u.id === id)?.username || id}
+            </strong>
+            <p>{label(String(role))}</p>
+          </Card>
+        ))}
+      </div>
+      {owner && (
+        <>
+          <ActionForm
+            title="添加或调整成员"
+            onSubmit={(v) =>
+              act("project.member", { projectId: project.id, ...v })
+            }
+            onDone={refresh}
+          >
+            <Form.Item
+              name="userId"
+              label="统一账号"
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={w.users.map((u: Row) => ({
+                  value: u.id,
+                  label: u.username,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item
+              name="role"
+              label="项目角色"
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={options(["owner", "member", "observer", "remove"])}
+              />
+            </Form.Item>
+          </ActionForm>
+          <ActionForm
+            key={project.id}
+            title="项目名称"
+            initialValues={{ name: project.name }}
+            onSubmit={(v) =>
+              act("project.update", { projectId: project.id, ...v })
+            }
+            onDone={refresh}
+          >
+            <Field name="name" title="名称" />
+          </ActionForm>
+        </>
+      )}
+      {session.user.admin && (
+        <Card title="统一账号管理" className="section-gap">
+          {w.users
+            .filter((u: Row) => u.id !== session.user.id)
+            .map((u: Row) => (
+              <div key={u.id}>
+                <strong>
+                  {u.username} · {u.active ? "正常" : "已停用"}
+                </strong>
+                <ActionButton
+                  text={u.active ? "停用账号" : "启用账号"}
+                  action={() =>
+                    act("user.update", { userId: u.id, active: !u.active })
+                  }
+                  refresh={refresh}
+                />
+              </div>
+            ))}
+        </Card>
+      )}
+    </>
+  );
+}
+function CredentialForm() {
+  const { project, refresh } = useData(),
+    [result, setResult] = useState<any>();
+  if (!project) return <NoProject />;
+  return (
+    <>
+      <PageTitle
+        title="授权 IDE / Agent"
+        back="/settings"
+        description="委托继承你的当前项目权限，可随时撤销。"
+      />
+      {result ? (
+        <Card title="凭证已生成">
+          <Alert type="success" message="请立即复制，明文只显示这一次。" />
+          <Typography.Paragraph copyable className="credential-token">
+            {result.token}
+          </Typography.Paragraph>
+          <Detail
+            items={[
+              ["到期时间", date(result.expiresAt)],
+              ["DEVOPS_URL", location.origin],
+              ["DEVOPS_PROJECT", project.id],
+            ]}
+          />
+          <p>
+            将凭证放入 IDE 的 DEVOPS_TOKEN 环境变量，或用作 Git
+            网关密码。不要写入仓库。
+          </p>
+          <Link to="/settings">
+            <Button>返回项目</Button>
+          </Link>
+        </Card>
+      ) : (
+        <ActionForm
+          title="委托信息"
+          button="生成短时凭证"
+          initialValues={{ role: "ide_agent", hours: 1 }}
+          onSubmit={(v) =>
+            act("credential.create", { projectId: project.id, ...v })
+          }
+          onDone={async (r) => {
+            setResult(r);
+            await refresh();
+          }}
+        >
+          <Field name="name" title="委托名称" placeholder="我的 IDE" />
+          <Form.Item name="role" label="用途">
+            <Select options={options(["human", "ide_agent", "devops_agent"])} />
+          </Form.Item>
+          <p className="muted">
+            IDE Agent 可维护需求和版本、推送工作分支；DevOps Agent 仅维护需求。
+          </p>
+          <Form.Item name="hours" label="有效期">
+            <Select
+              options={[1, 4, 8, 24].map((value) => ({
+                value,
+                label: value + " 小时",
+              }))}
+            />
+          </Form.Item>
+        </ActionForm>
+      )}
     </>
   );
 }
@@ -1241,284 +1512,6 @@ function ActionButton({
         {text}
       </Button>
       {error && <Alert type="error" className="section-gap" message={error} />}
-    </>
-  );
-}
-function Operations() {
-  const { w, project } = useData(),
-    ops = w.operations.filter((o: Row) => o.projectId === project?.id);
-  return (
-    <>
-      <PageTitle
-        title="发布与运行"
-        description="执行有身份、结果有来源。未知结果先对账，再恢复。"
-      />
-      {ops.length ? (
-        <div className="card-grid">
-          {[...ops].reverse().map((o: Row) => (
-            <Link key={o.id} className="card-link" to={"/operations/" + o.id}>
-              <Card hoverable>
-                <div className="card-top">
-                  <strong>{o.kind}</strong>
-                  <Status value={o.status} />
-                </div>
-                <p>{o.reason || date(o.createdAt)}</p>
-                <small>{o.id}</small>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <Blank
-          title="还没有执行操作"
-          description="构建、验收、Git 变更和发布请求会显示在这里。"
-        />
-      )}
-      {w.syncTasks
-        .filter((t: Row) => t.projectId === project?.id)
-        .map((t: Row) => (
-          <Card key={t.id} title="热修复同步" className="section-gap">
-            <Status value={t.status} />
-            <p>生产提交 {shortSha(t.productionSha)}</p>
-            <Link to={"/intents/" + t.intentId}>打开同步 Intent</Link>
-          </Card>
-        ))}
-    </>
-  );
-}
-function OperationDetail() {
-  const { id } = useParams(),
-    { w, refresh } = useData(),
-    o = w.operations.find((x: Row) => x.id === id);
-  if (!o) return null;
-  return (
-    <>
-      <PageTitle
-        title={"操作 · " + o.kind}
-        description={o.id}
-        back="/operations"
-        action={<Status value={o.status} />}
-      />
-      <Card title="执行输入与结果">
-        <Code value={o} />
-      </Card>
-      {o.status === "UNKNOWN" && (
-        <ActionForm
-          title="核验实际结果"
-          button="查询 Git 实际状态"
-          onSubmit={() => act("operation.reconcile", { id })}
-          onDone={refresh}
-        >
-          <Alert
-            type="warning"
-            message="Git 操作由程序查询；构建、测试和发布需原执行身份提交同一操作 ID 的签名回执。"
-          />
-        </ActionForm>
-      )}
-      <ActionForm
-        title="人工恢复"
-        button="核验后恢复，重新验收"
-        onSubmit={(v) => act("recovery", { id: o.subjectId, reason: v.reason })}
-        onDone={refresh}
-      >
-        <Field name="reason" title="对账结论与恢复理由" area />
-      </ActionForm>
-    </>
-  );
-}
-function Settings() {
-  const { w, project, refresh, session } = useData();
-  return (
-    <>
-      <PageTitle
-        title="项目与授权"
-        description="统一人类账号，按项目委托明确的能力。"
-        action={
-          <Space>
-            {session.user.admin && (
-              <Link to="/users/new">
-                <Button>创建统一账号</Button>
-              </Link>
-            )}
-            {project && (
-              <Link to="/credentials/new">
-                <Button type="primary">授权 IDE / 执行端</Button>
-              </Link>
-            )}
-          </Space>
-        }
-      />
-      {project && (
-        <>
-          <Card title={project.name}>
-            <Detail
-              items={[
-                [
-                  "Git 唯一入口",
-                  <Typography.Text copyable>
-                    {location.origin + "/git/" + project.slug + ".git"}
-                  </Typography.Text>,
-                ],
-                ["环境", project.environment],
-                ["验收环境", project.testEnvironment],
-                [
-                  "当前生产",
-                  project.production?.confirmed
-                    ? shortSha(project.production.actualSha)
-                    : "尚未核验",
-                ],
-              ]}
-            />
-            {project.production && !project.production.confirmed && (
-              <ActionButton
-                text="确认已报告的生产版本"
-                action={() =>
-                  act("production.confirm", {
-                    projectId: project.id,
-                    fingerprint: project.production.fingerprint,
-                  })
-                }
-                refresh={refresh}
-              />
-            )}
-          </Card>
-          <h2 className="section-gap">有效委托与历史授权</h2>
-          <div className="card-grid">
-            {w.credentials
-              .filter((c: Row) => c.projectId === project.id)
-              .map((c: Row) => (
-                <Card key={c.id} title={c.name}>
-                  <Tag>{label(c.role)}</Tag>
-                  <p>{c.revoked ? "已撤销" : "到期 " + date(c.expiresAt)}</p>
-                  {!c.revoked && (
-                    <ActionButton
-                      text="撤销凭证"
-                      action={() => act("credential.revoke", { id: c.id })}
-                      refresh={refresh}
-                    />
-                  )}
-                </Card>
-              ))}
-          </div>
-          <ActionForm
-            title="项目成员角色"
-            onSubmit={(v) =>
-              act("project.member", { projectId: project.id, ...v })
-            }
-            onDone={refresh}
-          >
-            <Form.Item
-              name="userId"
-              label="统一账号"
-              rules={[{ required: true }]}
-            >
-              <Select
-                options={w.users.map((u: Row) => ({
-                  label: u.username,
-                  value: u.id,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item
-              name="role"
-              label="项目角色"
-              rules={[{ required: true }]}
-            >
-              <Select
-                options={["owner", "reviewer", "member", "observer"].map(
-                  (v) => ({ value: v, label: label(v) }),
-                )}
-              />
-            </Form.Item>
-          </ActionForm>
-          <details className="section-gap">
-            <summary>配置版本与固定执行策略</summary>
-            <JsonEditor
-              title="项目配置"
-              initial={Object.fromEntries(
-                Object.keys(projectDefaults).map((k) => [k, project[k]]),
-              )}
-              onSave={async (settings) => {
-                await act("project.update", {
-                  projectId: project.id,
-                  settings,
-                });
-                await refresh();
-              }}
-            />
-          </details>
-        </>
-      )}
-    </>
-  );
-}
-function CredentialForm() {
-  const { project, refresh } = useData(),
-    [result, setResult] = useState<any>(),
-    [role, setRole] = useState("human");
-  if (!project) return <Blank title="请先选择项目" />;
-  return (
-    <>
-      <PageTitle
-        title="授权 IDE 与执行端"
-        description="凭证有效期一小时，关联当前人类账号和选定项目。"
-        back="/settings"
-      />
-      {result ? (
-        <Card title="凭证已签发，仅展示一次">
-          <Alert
-            type="warning"
-            message="将凭证保存到 IDE 凭证管理器，或执行端的密钥存储。不要写进 Git。"
-          />
-          <p>
-            <Typography.Text copyable>{result.token}</Typography.Text>
-          </p>
-          <Detail
-            items={[
-              ["身份", label(result.role)],
-              ["到期", date(result.expiresAt)],
-            ]}
-          />
-          <Link to="/settings">
-            <Button>返回授权管理</Button>
-          </Link>
-        </Card>
-      ) : (
-        <ActionForm
-          title="授权范围"
-          initialValues={{ role: "human" }}
-          button="生成短时凭证"
-          onSubmit={(v) =>
-            act("credential.create", { projectId: project.id, ...v, hours: 1 })
-          }
-          onDone={async (r) => {
-            setResult(r);
-            await refresh();
-          }}
-        >
-          <Field
-            name="name"
-            title="设备或执行端名称"
-            placeholder="Runner 名称必须匹配项目配置"
-          />
-          <Form.Item name="role" label="能力身份">
-            <Select
-              onChange={setRole}
-              options={[
-                "human",
-                "devops_agent",
-                "ide_agent",
-                "ide_control",
-                "runner",
-              ].map((v) => ({ value: v, label: label(v) }))}
-            />
-          </Form.Item>
-          <Field name="branch" title="限定工作分支（可选）" required={false} />
-          {["ide_control", "runner"].includes(role) && (
-            <Field name="publicKey" title="执行端 Ed25519 公钥（PEM）" area />
-          )}
-        </ActionForm>
-      )}
     </>
   );
 }
