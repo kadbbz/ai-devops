@@ -1,0 +1,66 @@
+export const projectDefaults = {
+  name: "",
+  slug: "",
+  configVersion: "1",
+  policyVersion: "1",
+  toolVersion: "node22",
+  runnerId: "acceptance",
+  apiCommand: "api",
+  e2eCommand: "e2e",
+  environment: "production",
+  testEnvironment: "acceptance",
+};
+export const newPlan = (goal: string, owner: string, refs: string[] = []) => ({
+  point: {
+    goal,
+    scope: ["待填写实际范围"],
+    nonGoals: ["待填写非目标"],
+    risks: ["待评估风险"],
+    owner,
+    references: [],
+  },
+  application: {
+    changes: [
+      {
+        object: "应用代码",
+        operation: "read",
+        scope: "无持久状态改变；需说明验证方式",
+      },
+    ],
+    preconditions: ["待填写前置条件"],
+    invariants: ["待填写不变量"],
+    acceptance: ["待填写可观察的验收标准"],
+    documentation: ["使用说明"],
+    apiCases: ["待填写接口验收"],
+    e2eCases: ["待填写用户路径"],
+    permissions: ["待填写执行身份和权限"],
+    idempotency: "待填写幂等键",
+    transaction: "待填写事务边界",
+    rollback: "待填写恢复步骤",
+    migration: "无",
+    idePaths: [
+      "src/",
+      "tests/unit/",
+      "tests/component/",
+      "package.json",
+      "package-lock.json",
+    ],
+  },
+  context: {
+    dataClass: "internal",
+    forbidden: ["禁止直接操作生产基础设施"],
+    entries: [],
+    hotfixRefs: refs,
+  },
+});
+export const newMaterials = {
+  manual: "",
+  changelog: "",
+  apiContract: "",
+  apiCases: [],
+  e2eCases: [],
+  dataPreparation: "",
+  dataCleanup: "",
+  dataDigest: "sha256:",
+  deviations: "无",
+};

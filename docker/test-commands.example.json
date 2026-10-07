@@ -1,7 +1,0 @@
-{
-  "node-tests": {
-    "executable": "node",
-    "args": ["--test"],
-    "timeoutMs": 60000
-  }
-}

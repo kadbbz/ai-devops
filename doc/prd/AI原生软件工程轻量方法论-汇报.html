@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 原生软件工程轻量方法论｜汇报版</title>
+  <style>
+    :root {
+      --ink: #162421;
+      --muted: #667572;
+      --paper: #f3f6f4;
+      --panel: #ffffff;
+      --line: #d8e1dd;
+      --teal: #0c756a;
+      --teal-soft: #dff2ee;
+      --coral: #bd5b4b;
+      --coral-soft: #fae8e3;
+      --gold: #936500;
+      --gold-soft: #fff1c9;
+      --blue: #315d8e;
+      --blue-soft: #e7eff8;
+      --violet: #6d568d;
+      --violet-soft: #eee9f5;
+      --shadow: 0 14px 34px rgba(23, 46, 40, .08);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+    button { font: inherit; }
+    .deck { min-height: 100vh; }
+    .topbar {
+      position: fixed;
+      z-index: 20;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      height: 58px;
+      padding: 0 28px;
+      border-bottom: 1px solid rgba(216, 225, 221, .94);
+      background: rgba(243, 246, 244, .94);
+      backdrop-filter: blur(12px);
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    .brand-mark { width: 12px; height: 12px; background: var(--teal); }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--ink);
+      background: var(--panel);
+      cursor: pointer;
+    }
+    .icon-btn:hover, .icon-btn:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .counter { min-width: 48px; color: var(--muted); font-size: 12px; text-align: center; }
+    .progress { position: fixed; z-index: 21; top: 57px; left: 0; height: 3px; width: 0; background: var(--teal); transition: width .25s ease; }
+    .slides { padding-top: 58px; }
+    .slide {
+      display: none;
+      min-height: calc(100vh - 58px);
+      padding: clamp(52px, 7vw, 88px) clamp(22px, 7vw, 104px) 72px;
+    }
+    .slide.active { display: block; animation: appear .3s ease both; }
+    @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .slide-inner { max-width: 1280px; margin: 0 auto; }
+    .eyebrow { color: var(--teal); font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 920px; margin: 18px 0 18px; font-size: clamp(42px, 7vw, 92px); line-height: .98; letter-spacing: 0; }
+    h2 { margin: 14px 0 12px; font-size: clamp(31px, 4.8vw, 62px); line-height: 1.04; }
+    h3 { margin-bottom: 8px; font-size: 18px; line-height: 1.2; }
+    .lead { max-width: 760px; color: var(--muted); font-size: clamp(16px, 1.8vw, 22px); line-height: 1.6; }
+    .small { color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .rule { width: 82px; height: 5px; margin: 28px 0; background: var(--coral); }
+    .hero { display: grid; grid-template-columns: 1.02fr .98fr; align-items: center; gap: clamp(32px, 7vw, 100px); min-height: calc(100vh - 190px); }
+    .hero-visual { padding: 24px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .hero-visual-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+    .hero-visual-title strong { font-size: 15px; }
+    .hero-visual-title span { color: var(--muted); font-size: 11px; }
+    .role-stack { display: grid; gap: 9px; margin-top: 17px; }
+    .role-row { display: grid; grid-template-columns: 104px 1fr; align-items: stretch; min-height: 54px; border: 1px solid var(--line); }
+    .role-name { display: flex; align-items: center; padding: 10px 12px; font-size: 12px; font-weight: 800; }
+    .role-desc { display: flex; align-items: center; padding: 10px 12px; color: var(--muted); font-size: 12px; line-height: 1.4; background: #fbfcfb; }
+    .role-row:nth-child(1) .role-name { color: var(--blue); background: var(--blue-soft); }
+    .role-row:nth-child(2) .role-name { color: var(--teal); background: var(--teal-soft); }
+    .role-row:nth-child(3) .role-name { color: var(--violet); background: var(--violet-soft); }
+    .role-row:nth-child(4) .role-name { color: var(--gold); background: var(--gold-soft); }
+    .role-row:nth-child(5) .role-name { color: var(--coral); background: var(--coral-soft); }
+    .callout { display: inline-block; padding: 11px 13px; border-left: 4px solid var(--teal); color: var(--ink); background: var(--teal-soft); font-size: 14px; line-height: 1.5; }
+    .three-columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; }
+    .two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 30px; }
+    .panel { padding: 21px 22px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .panel p:last-child, .panel ul:last-child { margin-bottom: 0; }
+    .panel-kicker { margin-bottom: 11px; color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+    .panel p, .panel li { color: var(--muted); font-size: 14px; line-height: 1.62; }
+    .panel ul { margin: 0; padding-left: 18px; }
+    .panel li + li { margin-top: 7px; }
+    .program { border-top: 4px solid var(--blue); }
+    .agent { border-top: 4px solid var(--teal); }
+    .human { border-top: 4px solid var(--coral); }
+    .lane-board { margin-top: 34px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .lane-head, .lane-row { display: grid; grid-template-columns: 140px repeat(5, 1fr); min-width: 900px; }
+    .lane-head { border-bottom: 1px solid var(--line); background: #fbfcfb; }
+    .lane-head > div, .lane-row > div { padding: 13px 14px; border-right: 1px solid var(--line); }
+    .lane-head > div:last-child, .lane-row > div:last-child { border-right: 0; }
+    .lane-head div { color: var(--muted); font-size: 11px; font-weight: 800; }
+    .lane-row { border-bottom: 1px solid var(--line); }
+    .lane-row:last-child { border-bottom: 0; }
+    .lane-row > div { min-height: 92px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .lane-row > div:first-child { color: var(--ink); font-weight: 800; background: #fbfcfb; }
+    .lane-row strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 13px; }
+    .tag { display: inline-block; padding: 4px 7px; border-radius: 3px; font-size: 10px; font-weight: 800; }
+    .tag.blue { color: var(--blue); background: var(--blue-soft); }
+    .tag.teal { color: var(--teal); background: var(--teal-soft); }
+    .tag.coral { color: var(--coral); background: var(--coral-soft); }
+    .tag.gold { color: var(--gold); background: var(--gold-soft); }
+    .tag.violet { color: var(--violet); background: var(--violet-soft); }
+    .scenario-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 34px; }
+    .scenario { display: grid; grid-template-columns: 42px 1fr; gap: 13px; padding: 18px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .scenario-number { display: grid; place-items: center; width: 34px; height: 34px; color: white; background: var(--teal); font-size: 13px; font-weight: 800; }
+    .scenario:nth-child(2) .scenario-number { background: var(--coral); }
+    .scenario:nth-child(3) .scenario-number { background: var(--gold); }
+    .scenario:nth-child(4) .scenario-number { background: var(--blue); }
+    .scenario:nth-child(5) .scenario-number { background: var(--violet); }
+    .scenario h3 { margin: 0 0 7px; font-size: 17px; }
+    .scenario p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.58; }
+    .scenario-wide { grid-column: 1 / -1; }
+    .stepper { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; margin-top: 38px; }
+    .step { position: relative; min-height: 175px; padding: 17px 14px 16px; border-top: 4px solid var(--teal); border-right: 1px solid var(--line); background: var(--panel); }
+    .step:first-child { border-left: 1px solid var(--line); }
+    .step:nth-child(2), .step:nth-child(5) { border-top-color: var(--coral); }
+    .step:nth-child(3), .step:nth-child(6) { border-top-color: var(--gold); }
+    .step-number { display: block; margin-bottom: 15px; color: var(--muted); font-size: 11px; font-weight: 800; }
+    .step h3 { margin: 0 0 7px; font-size: 14px; }
+    .step p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .step::after { content: "→"; position: absolute; z-index: 2; top: 70px; right: -12px; color: var(--teal); font-size: 19px; }
+    .step:last-child::after { display: none; }
+    .actor-line { display: inline-flex; margin-top: 13px; padding: 4px 6px; color: var(--ink); background: #f1f4f2; font-size: 10px; font-weight: 800; }
+    .hotfix-layout { display: grid; grid-template-columns: 1.08fr .92fr; gap: 22px; margin-top: 34px; align-items: stretch; }
+    .branch-board { position: relative; min-height: 385px; padding: 30px 24px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); overflow: hidden; }
+    .branch-row { display: grid; grid-template-columns: 125px 1fr; align-items: center; min-height: 80px; }
+    .branch-label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .branch-track { position: relative; height: 48px; border-top: 3px solid var(--blue); }
+    .branch-track.hotfix { border-color: var(--coral); }
+    .branch-track.sync { border-color: var(--teal); }
+    .branch-node { position: absolute; top: -12px; display: grid; place-items: center; min-width: 86px; height: 30px; padding: 0 8px; border: 1px solid currentColor; background: var(--panel); font-size: 10px; font-weight: 800; }
+    .branch-node.left { left: 0; }
+    .branch-node.mid { left: 43%; }
+    .branch-node.right { right: 0; }
+    .branch-track::after { content: ""; position: absolute; right: 3px; top: -10px; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 11px solid currentColor; }
+    .branch-track { color: var(--blue); }
+    .branch-track.hotfix { color: var(--coral); }
+    .branch-track.sync { color: var(--teal); }
+    .branch-note { margin-top: 20px; padding: 12px 13px; border-left: 4px solid var(--coral); color: var(--muted); background: var(--coral-soft); font-size: 12px; line-height: 1.55; }
+    .hotfix-steps { display: grid; gap: 11px; }
+    .hotfix-step { display: grid; grid-template-columns: 31px 1fr; gap: 10px; align-items: start; padding: 13px 14px; border: 1px solid var(--line); background: var(--panel); }
+    .hotfix-step b { display: grid; place-items: center; width: 25px; height: 25px; color: white; background: var(--coral); font-size: 11px; }
+    .hotfix-step strong { display: block; margin-bottom: 4px; font-size: 13px; }
+    .hotfix-step span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .responsibility-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 34px; }
+    .responsibility { padding: 20px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .responsibility h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 13px; font-size: 17px; }
+    .responsibility h3::before { content: ""; width: 10px; height: 10px; background: var(--teal); }
+    .responsibility:nth-child(2) h3::before { background: var(--gold); }
+    .responsibility:nth-child(3) h3::before { background: var(--coral); }
+    .responsibility ul { margin: 0; padding-left: 18px; }
+    .responsibility li { margin: 7px 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .release-flow { display: grid; grid-template-columns: 1fr 42px 1.2fr 42px 1fr; align-items: center; gap: 12px; margin-top: 34px; }
+    .release-node { min-height: 156px; padding: 19px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .release-node.request { border-top: 4px solid var(--gold); }
+    .release-node.control { border-top: 4px solid var(--blue); }
+    .release-node.result { border-top: 4px solid var(--teal); }
+    .release-node h3 { margin: 0 0 8px; font-size: 16px; }
+    .release-node p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .release-arrow { color: var(--muted); text-align: center; font-size: 25px; }
+    .failure-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+    .failure { padding: 14px; border: 1px solid var(--line); background: var(--panel); }
+    .failure code { display: block; margin-bottom: 6px; color: var(--coral); font-size: 12px; font-weight: 800; }
+    .failure p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .closing { display: grid; grid-template-columns: .86fr 1.14fr; align-items: center; gap: 50px; min-height: calc(100vh - 190px); }
+    .closing-rule { display: grid; gap: 12px; }
+    .closing-rule div { padding: 16px 18px; border-left: 5px solid var(--teal); background: var(--panel); box-shadow: var(--shadow); font-size: 17px; line-height: 1.45; }
+    .closing-rule div:nth-child(2) { border-color: var(--gold); }
+    .closing-rule div:nth-child(3) { border-color: var(--coral); }
+    .closing-note { padding: 27px; border: 1px solid var(--line); background: var(--ink); color: white; }
+    .closing-note h3 { margin-bottom: 14px; color: #d7f1eb; font-size: 20px; }
+    .closing-note p { margin: 0; color: #c3d1cd; font-size: 15px; line-height: 1.7; }
+    .footer-note { margin-top: 48px; color: var(--muted); font-size: 11px; }
+    @media (max-width: 1000px) {
+      .hero, .hotfix-layout, .closing { grid-template-columns: 1fr; }
+      .hero { min-height: auto; }
+      .three-columns, .responsibility-grid { grid-template-columns: 1fr; }
+      .stepper { grid-template-columns: repeat(3, 1fr); }
+      .step { border-bottom: 1px solid var(--line); }
+      .step:nth-child(3) { border-left: 1px solid var(--line); }
+      .step:nth-child(4) { border-left: 1px solid var(--line); }
+      .step::after { display: none; }
+      .closing { min-height: auto; }
+    }
+    @media (max-width: 680px) {
+      .topbar { height: 52px; padding: 0 15px; }
+      .progress { top: 51px; }
+      .slides { padding-top: 52px; }
+      .slide { min-height: calc(100vh - 52px); padding: 45px 17px 54px; }
+      h1 { font-size: clamp(39px, 13vw, 68px); }
+      h2 { font-size: 37px; }
+      .hero-visual { padding: 17px; }
+      .role-row { grid-template-columns: 92px 1fr; }
+      .scenario-grid, .two-columns, .failure-row { grid-template-columns: 1fr; }
+      .scenario-wide { grid-column: auto; }
+      .stepper { grid-template-columns: 1fr 1fr; }
+      .release-flow { grid-template-columns: 1fr; }
+      .release-arrow { transform: rotate(90deg); }
+      .top-actions .counter { display: none; }
+    }
+    @media print {
+      .topbar, .progress { display: none; }
+      .slides { padding-top: 0; }
+      .slide { display: block !important; min-height: auto; page-break-after: always; padding: 38px; }
+      .slide:last-child { page-break-after: auto; }
+      .panel, .hero-visual, .scenario, .lane-board, .branch-board, .hotfix-step, .release-node, .failure, .closing-rule div { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>AI SOFTWARE ENGINEERING</div>
+      <div class="top-actions">
+        <button class="icon-btn" id="prev" title="上一页" aria-label="上一页">←</button>
+        <span class="counter" id="counter" aria-live="polite">1 / 10</span>
+        <button class="icon-btn" id="next" title="下一页" aria-label="下一页">→</button>
+        <button class="icon-btn" id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
+      </div>
+    </header>
+    <div class="progress" id="progress"></div>
+
+    <div class="slides">
+      <section class="slide active" data-title="总览">
+        <div class="slide-inner hero">
+          <div>
+            <div class="eyebrow">汇报版 · 轻量方法论</div>
+            <h1>从 intent 到发布，五个角色各司其职</h1>
+            <p class="lead">把 AI 放进软件工程之后，最重要的不是增加更多 agent，而是让每个角色只做自己能被验证、能被追责的事情。</p>
+            <div class="rule"></div>
+            <p class="callout">一句话：<strong>人类决定是否继续，程序决定能否继续，agent 负责把工作做出来。</strong></p>
+          </div>
+          <div class="hero-visual">
+            <div class="hero-visual-title"><strong>五个角色</strong><span>两个程序 · 两个 agent · 人类</span></div>
+            <div class="role-stack">
+              <div class="role-row"><div class="role-name">DevOps 程序</div><div class="role-desc">交接、审批、证据、分支、PR 状态</div></div>
+              <div class="role-row"><div class="role-name">DevOps agent</div><div class="role-desc">方案、文档、API/E2E 验收、证据解释</div></div>
+              <div class="role-row"><div class="role-name">IDE 程序</div><div class="role-desc">编译、制品、部署、发布、回滚</div></div>
+              <div class="role-row"><div class="role-name">IDE agent</div><div class="role-desc">代码、单元/组件测试、请求提交</div></div>
+              <div class="role-row"><div class="role-name">人类</div><div class="role-desc">目标、审查、签发、合并、例外决策</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="分工">
+        <div class="slide-inner">
+          <div class="eyebrow">01 / 先记住分工</div>
+          <h2>两条确定性边界，隔开两类 AI 工作</h2>
+          <p class="lead">DevOps 管“目标与验收”，IDE 管“代码与发布”。两个 agent 都不能越过程序控制面。</p>
+          <div class="three-columns">
+            <article class="panel program"><div class="panel-kicker">DEVOPS 程序</div><h3>交接与治理</h3><p>把 intent 固化为确认工作区，校验版本、权限、证据、分支血缘和 PR 状态。</p></article>
+            <article class="panel agent"><div class="panel-kicker">DEVOPS AGENT</div><h3>理解与验收</h3><p>把需求变成方案、说明书、变更说明、接口契约和 API/E2E 测试。</p></article>
+            <article class="panel human"><div class="panel-kicker">人类</div><h3>承担判断</h3><p>确认改变什么，审查证据是否足够，在 Gate A/B/C 做出放行或回退决定。</p></article>
+          </div>
+          <div class="two-columns">
+            <article class="panel program"><div class="panel-kicker">IDE 程序</div><h3>工程执行与发布</h3><p>固定编译器、依赖、构建和制品流程；校验发布输入，执行部署、健康检查和回滚。</p></article>
+            <article class="panel agent"><div class="panel-kicker">IDE AGENT</div><h3>开发与请求</h3><p>实现代码、运行单元/组件测试、修复问题，然后提交编译或发布请求并读取结果。</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="关注场景">
+        <div class="slide-inner">
+          <div class="eyebrow">02 / 大家最关心的玩法</div>
+          <h2>同一套协同规则，覆盖常见软件工程场景</h2>
+          <p class="lead">变化的是基线和证据，不变化的是五个角色的权责边界。</p>
+          <div class="scenario-grid">
+            <article class="scenario"><div class="scenario-number">01</div><div><h3>新功能</h3><p>intent → Gate A → IDE 开发 → DevOps API/E2E → Gate B → PR → Gate C → 发布。</p></div></article>
+            <article class="scenario"><div class="scenario-number">02</div><div><h3>生产热修复</h3><p>从已部署的 <code>prod_sha</code> 修复、发布，再把生产修复回合并到功能线。</p></div></article>
+            <article class="scenario"><div class="scenario-number">03</div><div><h3>多个 PR 集成</h3><p>人类选择纳入范围，程序以最终组合提交重新验证，单个 PR 通过不等于组合通过。</p></div></article>
+            <article class="scenario"><div class="scenario-number">04</div><div><h3>说明书与 API/E2E</h3><p>DevOps agent 负责生成、维护、执行和留存；IDE agent 只负责代码和单元/组件测试。</p></div></article>
+            <article class="scenario scenario-wide"><div class="scenario-number">05</div><div><h3>发布失败或结果不明</h3><p>IDE 程序先进入 <code>FAILED</code> 或 <code>UNKNOWN</code>，通过操作 ID 和实际环境对账；人类决定回滚还是前向修复。</p></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="新功能">
+        <div class="slide-inner">
+          <div class="eyebrow">03 / 典型场景：新功能</div>
+          <h2>每一步只有一个主责，交接物保持不变</h2>
+          <p class="lead">从目标确认开始，到发布结果回传结束；DevOps 不安排开发，IDE 不自行改变目标。</p>
+          <div class="stepper">
+            <article class="step"><span class="step-number">01</span><h3>提出 intent</h3><p>需求、缺陷、事件或改进建议进入 DevOps。</p><span class="actor-line">人类提出</span></article>
+            <article class="step"><span class="step-number">02</span><h3>确认目标</h3><p>DevOps agent 生成方案、文档和 API/E2E；人类签发 Gate A。</p><span class="actor-line">人类 + DevOps</span></article>
+            <article class="step"><span class="step-number">03</span><h3>开发与编译</h3><p>IDE agent 改代码、跑单测；IDE 程序编译并生成制品。</p><span class="actor-line">IDE agent + 程序</span></article>
+            <article class="step"><span class="step-number">04</span><h3>验收与留证</h3><p>DevOps agent 执行 API/E2E，更新说明书和变更说明。</p><span class="actor-line">DevOps agent</span></article>
+            <article class="step"><span class="step-number">05</span><h3>签发 PR</h3><p>人类审查证据，Gate B 通过后程序自动创建 PR。</p><span class="actor-line">人类 + DevOps 程序</span></article>
+            <article class="step"><span class="step-number">06</span><h3>发布结果</h3><p>Gate C 通过，IDE agent 提交请求；IDE 程序完成发布和核验。</p><span class="actor-line">IDE 程序</span></article>
+          </div>
+          <div class="lane-board">
+            <div class="lane-head"><div>谁在做</div><div>目标</div><div>实现</div><div>验收</div><div>交付</div><div>发布</div></div>
+            <div class="lane-row"><div>人类</div><div><strong>确认</strong>改变什么</div><div>处理例外</div><div><strong>审查</strong>证据</div><div><strong>签发</strong>Gate B</div><div><strong>签发</strong>Gate C</div></div>
+            <div class="lane-row"><div>DevOps agent</div><div><strong>生成</strong>方案与文档</div><div>提供约束</div><div><strong>执行</strong>API/E2E</div><div>解释偏离</div><div>生成系统方案</div></div>
+            <div class="lane-row"><div>IDE agent</div><div>读取工作区</div><div><strong>实现</strong>代码与单测</div><div>回传结果</div><div>提供差异</div><div><strong>提交</strong>发布请求</div></div>
+            <div class="lane-row"><div>两个程序</div><div><strong>校验</strong>版本权限</div><div><strong>编译</strong>生成制品</div><div>汇总证据</div><div><strong>创建</strong>PR</div><div><strong>执行</strong>部署回滚</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="热修复">
+        <div class="slide-inner">
+          <div class="eyebrow">04 / 典型场景：生产热修复</div>
+          <h2>从生产版本修，修完必须回到功能线</h2>
+          <p class="lead">热修复不是一条绕过流程的捷径，而是换了基线的同一套流程。</p>
+          <div class="hotfix-layout">
+            <div class="branch-board">
+              <div class="branch-row"><div class="branch-label">生产线</div><div class="branch-track"><span class="branch-node left">prod_sha</span><span class="branch-node right">新生产版本</span></div></div>
+              <div class="branch-row"><div class="branch-label">热修复线</div><div class="branch-track hotfix"><span class="branch-node left">从生产派生</span><span class="branch-node mid">修复 + 验收</span><span class="branch-node right">生产 PR</span></div></div>
+              <div class="branch-row"><div class="branch-label">功能线</div><div class="branch-track sync"><span class="branch-node left">原功能开发</span><span class="branch-node mid">同步 PR</span><span class="branch-node right">带修复继续开发</span></div></div>
+              <div class="branch-note"><strong>关键约束：</strong>生产版本先对账，热修复上线后由程序创建同步任务；IDE agent 准备同步 PR，人类在 DevOps 中审查并合入。</div>
+            </div>
+            <div class="hotfix-steps">
+              <div class="hotfix-step"><b>1</b><div><strong>锁定生产基线</strong><span>DevOps 程序绑定 <code>prod_sha</code>、实际制品和事件号。</span></div></div>
+              <div class="hotfix-step"><b>2</b><div><strong>最小修复</strong><span>DevOps agent 补方案、文档和 API/E2E；IDE agent 只改热修复线。</span></div></div>
+              <div class="hotfix-step"><b>3</b><div><strong>按同样 Gate 发布</strong><span>Gate B 创建生产 PR，Gate C 后由 IDE 程序执行发布。</span></div></div>
+              <div class="hotfix-step"><b>4</b><div><strong>回合并功能线</strong><span>修复发布核验通过后，准备同步 PR，避免功能线重新引入旧问题。</span></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="文档与测试">
+        <div class="slide-inner">
+          <div class="eyebrow">05 / 典型场景：文档与测试</div>
+          <h2>DevOps agent 把“能不能验收”说清楚</h2>
+          <p class="lead">IDE agent 聚焦实现；DevOps agent 聚焦外部行为、用户路径和交付说明。</p>
+          <div class="responsibility-grid">
+            <article class="responsibility"><h3>DevOps agent</h3><ul><li>说明书和变更说明</li><li>接口契约与验收标准</li><li>API 测试与测试数据</li><li>E2E 测试与用户路径</li><li>执行、日志、失败重现和证据汇总</li></ul></article>
+            <article class="responsibility"><h3>IDE agent</h3><ul><li>业务代码和代码差异</li><li>单元测试与组件测试</li><li>实现问题修复</li><li>编译/发布请求参数</li><li>读取程序结果并回传事实</li></ul></article>
+            <article class="responsibility"><h3>程序与人类</h3><ul><li>程序校验版本、权限和 Runner</li><li>程序区分生成、登记、执行、通过</li><li>人类审查行为是否符合目标</li><li>人类决定例外和风险承担</li><li>证据变化后批准自动失效</li></ul></article>
+          </div>
+          <div class="two-columns">
+            <article class="panel"><div class="panel-kicker">一个常见问题</div><h3>“代码通过了，为什么还不能发？”</h3><p>因为代码测试只证明实现局部可用。还要确认接口行为、真实用户路径、文档、测试数据清理、制品来源和目标环境。</p></article>
+            <article class="panel"><div class="panel-kicker">一个清晰回答</div><h3>“谁来补 API/E2E？”</h3><p>DevOps agent 负责生成、维护、执行和留存；IDE agent 配合提供代码变化和可运行入口，但不接管验收职责。</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="发布安全">
+        <div class="slide-inner">
+          <div class="eyebrow">06 / 典型场景：发布与恢复</div>
+          <h2>agent 可以请求发布，但不能自己发布</h2>
+          <p class="lead">编译、制品、部署、健康检查和回滚全部落在 IDE 预设逻辑；DevOps 不调用基础设施 API。</p>
+          <div class="release-flow">
+            <article class="release-node request"><span class="tag gold">IDE AGENT</span><h3>提交发布请求</h3><p>带上确认工作区、系统方案、提交、制品摘要和目标环境。</p></article>
+            <div class="release-arrow">→</div>
+            <article class="release-node control"><span class="tag blue">IDE 程序</span><h3>校验并执行</h3><p>核对权限、制品、配置和顺序；执行部署、健康检查和回滚。</p></article>
+            <div class="release-arrow">→</div>
+            <article class="release-node result"><span class="tag teal">实际结果</span><h3>回传并记录</h3><p>记录实际版本、操作 ID、健康结果；版本不一致时阻断后续动作。</p></article>
+          </div>
+          <div class="failure-row">
+            <article class="failure"><code>FAIL_CLOSED</code><p>控制程序故障、权限解析失败或审计链断裂：冻结后续动作。</p></article>
+            <article class="failure"><code>UNKNOWN</code><p>结果不明确：先用操作 ID 和环境状态对账，不得盲目重试。</p></article>
+            <article class="failure"><code>HUMAN_RECOVERY</code><p>人类决定回滚、前向修复或关闭任务，程序负责恢复边界。</p></article>
+          </div>
+          <div class="callout" style="margin-top:22px">发布是一个<strong>程序控制的动作</strong>，不是 agent 的自然语言承诺。</div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="方案语义">
+        <div class="slide-inner">
+          <div class="eyebrow">07 / 只保留最小交接语义</div>
+          <h2>三类方案不增加流程，只说明三件事</h2>
+          <p class="lead">用最少的概念把“看什么、改什么、怎么交付”分开，避免职责重叠。</p>
+          <div class="three-columns">
+            <article class="panel"><span class="tag blue">点方案</span><h3>看什么</h3><p>只读目标、范围、风险、建议和参考。它不能改变应用数据状态。</p></article>
+            <article class="panel"><span class="tag gold">应用方案</span><h3>改什么</h3><p>明确写入、更新、删除、迁移、配置或权限改变，以及验收和回滚。</p></article>
+            <article class="panel"><span class="tag teal">系统方案</span><h3>怎么交付</h3><p>组合最终提交、制品、配置、环境、顺序、健康检查和恢复方式，作为 IDE 程序的发布输入。</p></article>
+          </div>
+          <div class="lane-board" style="margin-top:26px">
+            <div class="lane-head"><div>人类关心的问题</div><div>目标</div><div>状态改变</div><div>交付</div><div>最终证据</div><div>责任人</div></div>
+            <div class="lane-row"><div>审查时要问</div><div><strong>要解决什么</strong></div><div><strong>改变哪些状态</strong></div><div><strong>如何安全交付</strong></div><div><strong>如何证明完成</strong></div><div><strong>谁承担结果</strong></div></div>
+          </div>
+          <p class="footer-note">建议和参考可以进入点方案，但只有人类采纳后，才成为应用方案或系统方案的约束。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-title="协同规则">
+        <div class="slide-inner">
+          <div class="eyebrow">08 / 协同规则</div>
+          <h2>三句话，管住五个角色</h2>
+          <div class="closing">
+            <div class="closing-rule">
+              <div><strong>生成不等于授权。</strong><br>agent 可以提出方案、代码、测试和发布请求。</div>
+              <div><strong>程序决定能否继续。</strong><br>版本、权限、证据、编译、制品和发布条件必须可判定。</div>
+              <div><strong>人类承担结果。</strong><br>人类确认目标、签发交付、合并 PR，并处理例外和未知状态。</div>
+            </div>
+            <div class="closing-note">
+              <h3>最终的工作方式</h3>
+              <p>以 intent 为入口，以确认工作区为交接，以证据门禁控制流转。DevOps agent 负责文档和 API/E2E 验收，IDE agent 负责开发和请求，IDE 程序严格控制编译与发布，DevOps 程序严格控制状态与权限，人类在关键节点做出判断。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="结论">
+        <div class="slide-inner">
+          <div class="eyebrow">09 / 结论</div>
+          <h2>轻量，不等于少控制</h2>
+          <p class="lead">小团队只需要把控制放在最关键的边界：目标确认、证据验收、组合合并和程序化发布。</p>
+          <div class="three-columns">
+            <article class="panel program"><div class="panel-kicker">保留</div><h3>确定性控制</h3><p>版本、权限、证据、分支、编译、制品、部署和回滚。</p></article>
+            <article class="panel agent"><div class="panel-kicker">授权</div><h3>受控 AI 协作</h3><p>让两个 agent 承担整理、实现和验收工作，但不给它们最终放行权。</p></article>
+            <article class="panel human"><div class="panel-kicker">聚焦</div><h3>人的判断</h3><p>把人的时间放在目标、风险、证据和例外，而不是重复搬运信息。</p></article>
+          </div>
+          <p class="callout" style="margin-top:38px">适合小团队的最小闭环：<strong>目标清楚、证据完整、程序可控、人类负责。</strong></p>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const counter = document.getElementById('counter');
+      const progress = document.getElementById('progress');
+      let current = 0;
+
+      function render(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+        counter.textContent = `${current + 1} / ${slides.length}`;
+        progress.style.width = `${((current + 1) / slides.length) * 100}%`;
+        document.title = `${slides[current].dataset.title}｜AI 原生软件工程轻量方法论`;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      document.getElementById('prev').addEventListener('click', () => render(current - 1));
+      document.getElementById('next').addEventListener('click', () => render(current + 1));
+      document.getElementById('fullscreen').addEventListener('click', async () => {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+        else await document.exitFullscreen?.();
+      });
+      document.addEventListener('keydown', event => {
+        if (['ArrowRight', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); render(current + 1); }
+        if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); render(current - 1); }
+        if (event.key === 'Home') render(0);
+        if (event.key === 'End') render(slides.length - 1);
+      });
+      render(0);
+    })();
+  </script>
+</body>
+</html>

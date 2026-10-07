@@ -1,0 +1,2 @@
+#!/command/with-contenv sh
+exec flock --no-fork -n /data node /app/dist/ops.js serve

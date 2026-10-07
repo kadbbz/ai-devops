@@ -1,6 +1,9 @@
-**/node_modules
-**/dist
-**/.data
-**/.env
-**/test-results
 .git
+node_modules
+dist
+web/dist
+.data
+.env
+test-results
+playwright-report
+doc/test_case/results

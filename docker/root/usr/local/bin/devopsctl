@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ "$1" = "restore" ]; then
+  exec flock --no-fork -n /data node /app/dist/ops.js "$@"
+fi
+exec node /app/dist/ops.js "$@"
